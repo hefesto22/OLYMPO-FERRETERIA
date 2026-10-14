@@ -3,7 +3,6 @@
 declare(strict_types=1);
 
 use Rector\Config\RectorConfig;
-use Rector\Set\ValueObject\LevelSetList;
 
 return RectorConfig::configure()
     ->withPaths([
@@ -18,10 +17,7 @@ return RectorConfig::configure()
         __DIR__.'/vendor',
         __DIR__.'/public/build',
     ])
-    ->withPhpSets(php84: true)
-    ->withSets([
-        LevelSetList::UP_TO_PHP_84,
-    ])
+    ->withPhpSets(php85: true)
     ->withRules([
         // Reglas de modernización seguras
     ])

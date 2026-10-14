@@ -33,14 +33,17 @@
         <env name="CACHE_STORE" value="array"/>
 
         <!--
-            DB de testing en PostgreSQL — algunos tests dependen de
-            features específicas de Postgres (CTE recursivo, JSONB).
-            Crear una DB dedicada antes de correr los tests:
-                createdb plantilla_olympo_test
-            O usa la variable DB_DATABASE_TEST para apuntar a otra.
+            DB de TESTING en PostgreSQL — separada de la DB local.
+              · Local (lo que usamos a diario): alianza_hozana       → .env
+              · Tests (RefreshDatabase la borra): alianza_hozana_test → aquí
+            force="true" para que ni el .env ni una variable exportada en la
+            terminal puedan apuntar los tests a la DB local. Además
+            tests/TestCase.php aborta si el nombre de la DB no lleva "_test".
+            Crear la DB de tests (una sola vez):
+                DB_DATABASE=alianza_hozana_test php artisan migrate   (responder Yes)
         -->
-        <env name="DB_CONNECTION" value="pgsql"/>
-        <env name="DB_DATABASE" value="plantilla_olympo_test"/>
+        <env name="DB_CONNECTION" value="pgsql" force="true"/>
+        <env name="DB_DATABASE" value="alianza_hozana_test" force="true"/>
         <env name="DB_HOST" value="127.0.0.1"/>
         <env name="DB_PORT" value="5432"/>
 

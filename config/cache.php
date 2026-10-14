@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use App\Models\BrandingSetting;
 use Illuminate\Support\Str;
 
 return [
@@ -115,5 +116,20 @@ return [
     */
 
     'prefix' => env('CACHE_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')).'-cache-'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Serializable Classes (Laravel 13)
+    |--------------------------------------------------------------------------
+    |
+    | Laravel 13 ya no deserializa objetos del cache salvo que estén en esta
+    | lista. Cualquier modelo u objeto que se guarde con Cache::remember()
+    | tiene que agregarse aquí o volverá como __PHP_Incomplete_Class.
+    |
+    */
+
+    'serializable_classes' => [
+        BrandingSetting::class,
+    ],
 
 ];

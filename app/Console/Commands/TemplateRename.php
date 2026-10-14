@@ -36,9 +36,13 @@ class TemplateRename extends Command
 
     public function handle(): int
     {
-        $name = (string) $this->option('name');
-        $slug = (string) $this->option('slug');
-        $domain = (string) ($this->option('domain') ?? '');
+        $nameOption = $this->option('name');
+        $slugOption = $this->option('slug');
+        $domainOption = $this->option('domain');
+
+        $name = is_string($nameOption) ? $nameOption : '';
+        $slug = is_string($slugOption) ? $slugOption : '';
+        $domain = is_string($domainOption) ? $domainOption : '';
 
         // Validaciones de entrada
         if ($name === '') {

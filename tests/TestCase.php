@@ -4,9 +4,32 @@ declare(strict_types=1);
 
 namespace Tests;
 
+use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Testing\TestCase as BaseTestCase;
+use RuntimeException;
 
 abstract class TestCase extends BaseTestCase
 {
-    //
+    /**
+     * Candado: los tests SOLO pueden correr contra una DB cuyo nombre lleve "_test".
+     *
+     * Se valida aquí (antes de RefreshDatabase) para que un config:cache viejo
+     * o un .env mal puesto nunca borre la DB local de desarrollo.
+     */
+    public function createApplication(): Application
+    {
+        $app = parent::createApplication();
+
+        $connection = config()->string('database.default');
+        $database = config()->string("database.connections.{$connection}.database");
+
+        if (! str_contains($database, '_test')) {
+            throw new RuntimeException(
+                "Tests abortados: la DB [{$database}] no es de testing (falta \"_test\"). "
+                .'Corre `php artisan config:clear` y revisa phpunit.xml.'
+            );
+        }
+
+        return $app;
+    }
 }
