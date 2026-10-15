@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\RolFerreteria;
 use App\Traits\HasAuditFields;
 use BezhanSalleh\FilamentShield\Support\Utils as ShieldUtils;
 use BezhanSalleh\FilamentShield\Traits\HasPanelShield;
@@ -79,7 +80,8 @@ class User extends Authenticatable implements FilamentUser
         }
 
         return $this->hasRole(ShieldUtils::getSuperAdminName())
-            || $this->hasRole(ShieldUtils::getPanelUserRoleName());
+            || $this->hasRole(ShieldUtils::getPanelUserRoleName())
+            || $this->hasAnyRole(RolFerreteria::nombres());
     }
 
     /**

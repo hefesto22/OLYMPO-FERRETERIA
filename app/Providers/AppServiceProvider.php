@@ -7,6 +7,7 @@ namespace App\Providers;
 use App\Listeners\RecordUserLogin;
 use App\Models\AjusteInventario;
 use App\Models\Compra;
+use App\Models\Venta;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
@@ -60,6 +61,7 @@ class AppServiceProvider extends ServiceProvider
         Relation::morphMap([
             'compra'            => Compra::class,
             'ajuste_inventario' => AjusteInventario::class,
+            'venta'             => Venta::class,
         ]);
     }
 }

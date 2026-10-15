@@ -1,0 +1,6 @@
+@import '../../../../vendor/filament/filament/resources/css/theme.css';
+
+/* Clases de Tailwind usadas en las páginas y vistas propias del panel
+   (punto de venta, datos de la empresa). */
+@source '../../../../app/Filament/**/*';
+@source '../../../../resources/views/filament/**/*';

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers\Filament;
 
+use App\Http\Controllers\Tickets\TicketTurnoController;
+use App\Http\Controllers\Tickets\TicketVentaController;
 use App\Models\BrandingSetting;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
 use Filament\Http\Middleware\Authenticate;
@@ -20,6 +22,7 @@ use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Routing\Middleware\SubstituteBindings;
 use Illuminate\Session\Middleware\StartSession;
+use Illuminate\Support\Facades\Route;
 use Illuminate\View\Middleware\ShareErrorsFromSession;
 use Throwable;
 
@@ -76,10 +79,19 @@ class AdminPanelProvider extends PanelProvider
             ->databaseNotificationsPolling('30s')
             ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
             ->sidebarCollapsibleOnDesktop()
+            // Tema propio (Tailwind) para el punto de venta y vistas personalizadas.
+            ->viteTheme('resources/css/filament/admin/theme.css')
+            // Tickets de 80 mm (venta y cierre de turno), con la sesión del panel.
+            ->authenticatedRoutes(function (): void {
+                Route::get('tickets/ventas/{venta}', TicketVentaController::class)->name('tickets.venta');
+                Route::get('tickets/turnos/{turno}', TicketTurnoController::class)->name('tickets.turno');
+            })
             // Orden de los grupos del menú lateral.
             ->navigationGroups([
+                'Ventas',
                 'Inventario',
                 'Compras',
+                'Facturación',
                 'Administración',
             ]);
     }

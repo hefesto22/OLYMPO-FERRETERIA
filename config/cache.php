@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Models\BrandingSetting;
+use App\Models\ConfiguracionEmpresa;
 use Illuminate\Support\Str;
 
 return [
@@ -130,6 +131,7 @@ return [
 
     'serializable_classes' => [
         BrandingSetting::class,
+        ConfiguracionEmpresa::class,
     ],
 
 ];
