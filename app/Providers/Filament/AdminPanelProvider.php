@@ -75,7 +75,13 @@ class AdminPanelProvider extends PanelProvider
             ->databaseNotifications()
             ->databaseNotificationsPolling('30s')
             ->globalSearchKeyBindings(['command+k', 'ctrl+k'])
-            ->sidebarCollapsibleOnDesktop();
+            ->sidebarCollapsibleOnDesktop()
+            // Orden de los grupos del menú lateral.
+            ->navigationGroups([
+                'Inventario',
+                'Compras',
+                'Administración',
+            ]);
     }
 
     /**

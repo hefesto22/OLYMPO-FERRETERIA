@@ -1,6 +1,8 @@
 <?php
 
 declare(strict_types=1);
+use App\Filament\Resources\AjustesInventario\AjusteInventarioResource;
+use App\Filament\Resources\Compras\CompraResource;
 use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource;
 use Filament\Pages\Dashboard;
 use Filament\Widgets\AccountWidget;
@@ -176,6 +178,10 @@ return [
                 'update',
                 'delete',
             ],
+            // Acciones propias del negocio → permisos Confirmar:Compra,
+            // Anular:Compra y Aplicar:AjusteInventario (se suman a los default).
+            CompraResource::class           => ['confirmar', 'anular'],
+            AjusteInventarioResource::class => ['aplicar'],
         ],
         'exclude' => [
             //

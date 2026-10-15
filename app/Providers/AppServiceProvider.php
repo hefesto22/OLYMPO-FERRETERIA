@@ -5,11 +5,14 @@ declare(strict_types=1);
 namespace App\Providers;
 
 use App\Listeners\RecordUserLogin;
+use App\Models\AjusteInventario;
+use App\Models\Compra;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
 use Filament\Facades\Filament;
 use Filament\Support\Facades\FilamentView;
 use Illuminate\Auth\Events\Login;
+use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\ServiceProvider;
 
@@ -50,5 +53,13 @@ class AppServiceProvider extends ServiceProvider
 
         // ─── Eventos ────────────────────────────────────────────────────
         Event::listen(Login::class, RecordUserLogin::class);
+
+        // ─── Morph map ──────────────────────────────────────────────────
+        // Alias estables para los documentos que mueven inventario (columna
+        // documento_type del kardex): la base no depende del nombre de la clase.
+        Relation::morphMap([
+            'compra'            => Compra::class,
+            'ajuste_inventario' => AjusteInventario::class,
+        ]);
     }
 }

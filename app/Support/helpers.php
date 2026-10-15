@@ -171,3 +171,24 @@ if (! function_exists('telefonoHN')) {
         return sprintf('+504 %s-%s', substr($limpio, 0, 4), substr($limpio, 4, 4));
     }
 }
+
+if (! function_exists('cantidadFormato')) {
+    /**
+     * Formatea una cantidad de inventario sin ceros sobrantes.
+     *
+     *   cantidadFormato(12.5)      => "12.5"
+     *   cantidadFormato(200)       => "200"
+     *   cantidadFormato(1500.25)   => "1,500.25"
+     *   cantidadFormato(0.3333)    => "0.333"
+     */
+    function cantidadFormato(float|int|string|null $valor, int $decimales = 3): string
+    {
+        $numero = number_format((float) $valor, $decimales, '.', ',');
+
+        if (str_contains($numero, '.')) {
+            $numero = rtrim(rtrim($numero, '0'), '.');
+        }
+
+        return $numero === '-0' ? '0' : $numero;
+    }
+}

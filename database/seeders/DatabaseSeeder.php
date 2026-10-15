@@ -14,6 +14,12 @@ class DatabaseSeeder extends Seeder
             RoleSeeder::class,
             AdminUserSeeder::class,
             BrandingSettingSeeder::class,
+            CatalogoBaseSeeder::class,
         ]);
+
+        // Productos e inventario de ejemplo, solo en desarrollo local.
+        if (app()->environment('local')) {
+            $this->call(DemoFerreteriaSeeder::class);
+        }
     }
 }
