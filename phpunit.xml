@@ -34,18 +34,18 @@
 
         <!--
             DB de TESTING en PostgreSQL — separada de la DB local.
-              · Local (lo que usamos a diario): plantilla_olympo       → .env
-              · Tests (RefreshDatabase la borra): plantilla_olympo_test → aquí
+              · Local (lo que usamos a diario): olympo_ferreteria       → .env
+              · Tests (RefreshDatabase la borra): olympo_ferreteria_test → aquí
             force="true" para que ni el .env ni una variable exportada en la
             terminal puedan apuntar los tests a la DB local. Además
             tests/TestCase.php aborta si el nombre de la DB no lleva "_test".
+            Host y puerto NO van aquí: salen del .env (cada proyecto tiene su
+            propio contenedor Postgres en su propio puerto).
             Crear la DB de tests (una sola vez):
-                DB_DATABASE=plantilla_olympo_test php artisan migrate   (responder Yes)
+                DB_DATABASE=olympo_ferreteria_test php artisan migrate   (responder Yes)
         -->
         <env name="DB_CONNECTION" value="pgsql" force="true"/>
-        <env name="DB_DATABASE" value="plantilla_olympo_test" force="true"/>
-        <env name="DB_HOST" value="127.0.0.1"/>
-        <env name="DB_PORT" value="5432"/>
+        <env name="DB_DATABASE" value="olympo_ferreteria_test" force="true"/>
 
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>

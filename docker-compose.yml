@@ -20,28 +20,29 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: ${COMPOSE_PROJECT_NAME:-plantilla_olympo}_postgres
+    container_name: ${COMPOSE_PROJECT_NAME:-olympo_ferreteria}_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: ${DB_DATABASE:-plantilla_olympo}
+      POSTGRES_DB: ${DB_DATABASE:-olympo_ferreteria}
       POSTGRES_USER: ${DB_USERNAME:-postgres}
       POSTGRES_PASSWORD: ${COMPOSE_POSTGRES_PASSWORD:-}
-      POSTGRES_HOST_AUTH_METHOD: ${COMPOSE_POSTGRES_PASSWORD:+md5}
-      # Si COMPOSE_POSTGRES_PASSWORD está vacío, Postgres acepta
-      # conexiones sin password (solo desarrollo local).
+      POSTGRES_HOST_AUTH_METHOD: ${COMPOSE_POSTGRES_HOST_AUTH_METHOD:-trust}
+      # trust = sin password (solo desarrollo local). La imagen oficial
+      # NO arranca con POSTGRES_PASSWORD vacío si el método no es trust.
+      # Si pones COMPOSE_POSTGRES_PASSWORD, cambia el método a scram-sha-256.
     ports:
       - "${COMPOSE_POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-plantilla_olympo}"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-postgres} -d ${DB_DATABASE:-olympo_ferreteria}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
   redis:
     image: redis:7-alpine
-    container_name: ${COMPOSE_PROJECT_NAME:-plantilla_olympo}_redis
+    container_name: ${COMPOSE_PROJECT_NAME:-olympo_ferreteria}_redis
     restart: unless-stopped
     command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
     ports:
@@ -56,6 +57,6 @@ services:
 
 volumes:
   postgres_data:
-    name: ${COMPOSE_PROJECT_NAME:-plantilla_olympo}_postgres_data
+    name: ${COMPOSE_PROJECT_NAME:-olympo_ferreteria}_postgres_data
   redis_data:
-    name: ${COMPOSE_PROJECT_NAME:-plantilla_olympo}_redis_data
+    name: ${COMPOSE_PROJECT_NAME:-olympo_ferreteria}_redis_data
