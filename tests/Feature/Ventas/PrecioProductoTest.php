@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Enums\ListaPrecio;
+use App\Enums\TipoMargen;
 use App\Models\Producto;
 use App\Models\ProductoPresentacion;
 use App\Support\Ventas\PrecioProducto;
@@ -48,4 +49,34 @@ it('en mayoreo calcula la presentación sin precio propio con el mayoreo base', 
 
     expect(PrecioProducto::unitario($clavo, $caja, ListaPrecio::Publico))->toBe(1400.0)
         ->and(PrecioProducto::unitario($clavo, $caja, ListaPrecio::Mayoreo))->toBe(1275.0);
+});
+
+it('redondea al lempira el precio automático de una presentación', function (): void {
+    $suelto = (new ProductoPresentacion)->forceFill(['factor' => 0.01, 'precio_venta' => null]);
+    $media = (new ProductoPresentacion)->forceFill(['factor' => 0.5, 'precio_venta' => null]);
+
+    // 28 × 0.01 = 0.28 → L 1; 27.50 × 0.5 = 13.75 → L 14.
+    expect(PrecioProducto::unitario((new Producto)->forceFill(['precio_venta' => 28.00, 'precio_mayoreo' => null]), $suelto, ListaPrecio::Publico))->toBe(1.0)
+        ->and(PrecioProducto::unitario((new Producto)->forceFill(['precio_venta' => 27.50, 'precio_mayoreo' => null]), $media, ListaPrecio::Publico))->toBe(14.0);
+});
+
+it('con margen calcula cada presentación sobre su propio costo', function (): void {
+    $clavo = (new Producto)->forceFill([
+        'margen_tipo'    => TipoMargen::Porcentaje,
+        'margen_publico' => 30,
+        'margen_mayoreo' => 20,
+        'costo_precio'   => 18.80,
+        'precio_venta'   => 29.00,
+        'precio_mayoreo' => 26.00,
+    ]);
+
+    $bolsa = (new ProductoPresentacion)->forceFill(['factor' => 1, 'precio_venta' => null]);
+    $suelto = (new ProductoPresentacion)->forceFill(['factor' => 0.01, 'precio_venta' => null]);
+    $caja = (new ProductoPresentacion)->forceFill(['factor' => 50, 'precio_venta' => null]);
+
+    // Caja: 940 × 1.30 × 1.15 = 1405.30 → L 1406; en mayoreo 940 × 1.20 × 1.15 = 1297.20 → L 1298.
+    expect(PrecioProducto::unitario($clavo, $bolsa, ListaPrecio::Publico))->toBe(29.0)
+        ->and(PrecioProducto::unitario($clavo, $suelto, ListaPrecio::Publico))->toBe(1.0)
+        ->and(PrecioProducto::unitario($clavo, $caja, ListaPrecio::Publico))->toBe(1406.0)
+        ->and(PrecioProducto::unitario($clavo, $caja, ListaPrecio::Mayoreo))->toBe(1298.0);
 });

@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\EstadoCambioPrecio;
 use App\Enums\TipoIsv;
+use App\Enums\TipoMargen;
 use App\Support\NumeroDocumento;
+use App\Support\Precios\CalculadoraPrecio;
 use App\Traits\HasAuditFields;
 use Database\Factories\ProductoFactory;
 use Illuminate\Database\Eloquent\Builder;
@@ -28,6 +31,11 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * fillable: solo los modifica InventarioService, dentro de una
  * transacción y dejando su movimiento en el kardex.
  *
+ * Precio: a mano, o por margen sobre el costo (TipoMargen). Con margen,
+ * `precio_venta` y `precio_mayoreo` se calculan solos sobre
+ * `costo_precio`, que solo mueve PrecioService (sube solo si sube el
+ * costo; si baja, espera al dueño).
+ *
  * @property int $id
  * @property string|null $codigo
  * @property string|null $codigo_barras
@@ -39,8 +47,12 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property TipoIsv $tipo_isv
  * @property string $precio_venta
  * @property string|null $precio_mayoreo
+ * @property TipoMargen $margen_tipo
+ * @property string|null $margen_publico
+ * @property string|null $margen_mayoreo
  * @property string $costo_promedio
  * @property string $ultimo_costo
+ * @property string $costo_precio
  * @property string $stock
  * @property string $stock_minimo
  * @property string|null $ubicacion
@@ -54,6 +66,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
  * @property-read Marca|null $marca
  * @property-read UnidadMedida $unidadMedida
  * @property-read Collection<int, ProductoPresentacion> $presentaciones
+ * @property-read Collection<int, CambioPrecio> $cambiosPrecio
  */
 class Producto extends Model
 {
@@ -64,6 +77,9 @@ class Producto extends Model
 
     use LogsActivity;
     use SoftDeletes;
+
+    /** Campos que, al cambiar, son una decisión de precio del dueño. */
+    private const CAMPOS_DE_PRECIO = ['margen_tipo', 'margen_publico', 'margen_mayoreo', 'tipo_isv'];
 
     protected $table = 'productos';
 
@@ -79,6 +95,9 @@ class Producto extends Model
         'tipo_isv',
         'precio_venta',
         'precio_mayoreo',
+        'margen_tipo',
+        'margen_publico',
+        'margen_mayoreo',
         'stock_minimo',
         'ubicacion',
         'imagen_path',
@@ -92,10 +111,12 @@ class Producto extends Model
     /** @var array<string, mixed> */
     protected $attributes = [
         'tipo_isv'       => 'gravado_15',
+        'margen_tipo'    => 'manual',
         'stock'          => 0,
         'stock_minimo'   => 0,
         'costo_promedio' => 0,
         'ultimo_costo'   => 0,
+        'costo_precio'   => 0,
         'controla_stock' => true,
         'activo'         => true,
     ];
@@ -109,9 +130,13 @@ class Producto extends Model
             'tipo_isv'       => TipoIsv::class,
             'precio_venta'   => 'decimal:2',
             'precio_mayoreo' => 'decimal:2',
+            'margen_tipo'    => TipoMargen::class,
+            'margen_publico' => 'decimal:2',
+            'margen_mayoreo' => 'decimal:2',
             'costo_promedio' => 'decimal:4',
             'ultimo_costo'   => 'decimal:4',
-            'stock'          => 'decimal:3',
+            'costo_precio'   => 'decimal:4',
+            'stock'          => 'decimal:6',
             'stock_minimo'   => 'decimal:3',
             'controla_stock' => 'boolean',
             'activo'         => 'boolean',
@@ -139,6 +164,33 @@ class Producto extends Model
 
             $producto->forceFill(['codigo' => $codigo])->saveQuietly();
         });
+
+        // Con margen el precio no se teclea: sale del costo. Si se cambia el
+        // margen o el ISV, es una decisión de precio nueva y se toma el costo
+        // promedio de hoy; si solo se movió el costo base (PrecioService),
+        // se recalcula sobre ese.
+        static::saving(static function (Producto $producto): void {
+            if (! $producto->usaMargen()) {
+                return;
+            }
+
+            if ($producto->isDirty(self::CAMPOS_DE_PRECIO)) {
+                $producto->forceFill(['costo_precio' => $producto->costo_promedio]);
+            }
+
+            if ($producto->isDirty([...self::CAMPOS_DE_PRECIO, 'costo_precio'])) {
+                $producto->calcularPreciosConMargen();
+            }
+        });
+
+        // Si el dueño fijó un margen nuevo, una baja que esperaba revisión ya no aplica.
+        static::updated(static function (Producto $producto): void {
+            if ($producto->wasChanged(self::CAMPOS_DE_PRECIO)) {
+                $producto->cambiosPrecio()
+                    ->where('estado', EstadoCambioPrecio::Pendiente)
+                    ->update(['estado' => EstadoCambioPrecio::Descartado]);
+            }
+        });
     }
 
     /**
@@ -148,7 +200,7 @@ class Producto extends Model
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
-            ->logOnly(['codigo', 'codigo_barras', 'nombre', 'precio_venta', 'precio_mayoreo', 'tipo_isv', 'activo'])
+            ->logOnly(['codigo', 'codigo_barras', 'nombre', 'precio_venta', 'precio_mayoreo', 'margen_tipo', 'margen_publico', 'margen_mayoreo', 'tipo_isv', 'activo'])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs()
             ->setDescriptionForEvent(fn (string $eventName): string => "Producto {$eventName}");
@@ -196,6 +248,14 @@ class Producto extends Model
         return $this->hasMany(MovimientoInventario::class, 'producto_id');
     }
 
+    /**
+     * @return HasMany<CambioPrecio, $this>
+     */
+    public function cambiosPrecio(): HasMany
+    {
+        return $this->hasMany(CambioPrecio::class, 'producto_id');
+    }
+
     // ─── Reglas del producto ──────────────────────────────────
 
     public function existencia(): float
@@ -217,10 +277,10 @@ class Producto extends Model
     }
 
     /**
-     * Margen sobre el precio sin ISV, como fracción (0.30 = 30%).
-     * Null si todavía no hay costo o precio.
+     * Ganancia sobre el costo promedio, como fracción (0.30 = 30%): lo
+     * mismo que se configura como margen. Null si aún no hay costo o precio.
      */
-    public function margen(): ?float
+    public function gananciaSobreCosto(): ?float
     {
         $precio = $this->precioSinIsv();
         $costo = (float) $this->costo_promedio;
@@ -229,7 +289,44 @@ class Producto extends Model
             return null;
         }
 
-        return round(($precio - $costo) / $precio, 4);
+        return round(($precio - $costo) / $costo, 4);
+    }
+
+    public function usaMargen(): bool
+    {
+        return $this->margen_tipo !== TipoMargen::Manual;
+    }
+
+    /**
+     * Precio con margen (ISV incluido, lempiras enteros) de `$factor`
+     * unidades base al costo indicado. Null si el producto no usa margen o
+     * no tiene margen para esa lista (mayoreo vacío).
+     */
+    public function precioConMargen(float $costoBase, bool $mayoreo = false, float $factor = 1.0): ?float
+    {
+        $margen = $mayoreo ? $this->margen_mayoreo : $this->margen_publico;
+
+        if (! $this->usaMargen() || $margen === null) {
+            return null;
+        }
+
+        return CalculadoraPrecio::precio($costoBase, $this->margen_tipo, (float) $margen, $this->tipo_isv->tasa(), $factor);
+    }
+
+    /**
+     * Fija precio público y mayoreo con el margen sobre `costo_precio`.
+     * Sin costo todavía, el precio queda en 0 (no se puede vender) hasta
+     * la primera compra o existencia inicial.
+     */
+    public function calcularPreciosConMargen(): void
+    {
+        $costo = (float) $this->costo_precio;
+        $mayoreo = $this->precioConMargen($costo, mayoreo: true);
+
+        $this->forceFill([
+            'precio_venta'   => $this->precioConMargen($costo) ?? 0.0,
+            'precio_mayoreo' => $mayoreo !== null && $mayoreo > 0 ? $mayoreo : null,
+        ]);
     }
 
     // ─── Scopes ───────────────────────────────────────────────

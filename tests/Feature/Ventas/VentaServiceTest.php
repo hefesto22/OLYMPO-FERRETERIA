@@ -8,10 +8,12 @@ use App\Domain\Exceptions\PagoInsuficienteException;
 use App\Domain\Exceptions\StockInsuficienteException;
 use App\Domain\Exceptions\TurnoCajaException;
 use App\Domain\Exceptions\VentaInvalidaException;
+use App\Enums\EquivalenciaPresentacion;
 use App\Enums\EstadoVenta;
 use App\Enums\ListaPrecio;
 use App\Enums\MetodoPago;
 use App\Enums\TipoDocumentoVenta;
+use App\Enums\TipoMargen;
 use App\Enums\TipoMovimientoInventario;
 use App\Models\Caja;
 use App\Models\ConfiguracionEmpresa;
@@ -258,4 +260,52 @@ it('anular una venta devuelve el stock al inventario', function (): void {
 
     expect(fn () => app(VentaService::class)->anular($venta, 'Otra vez', $cajero))
         ->toThrow(VentaInvalidaException::class);
+});
+
+it('vende clavos sueltos de un producto que se lleva en libras', function (): void {
+    [$cajero] = cajeroConTurnoAbierto();
+    $producto = productoEnExistencia(10, ['precio_venta' => 28]);
+
+    $suelto = $producto->presentaciones()->create([
+        'unidad_medida_id' => UnidadMedida::factory()->create()->id,
+        'nombre'           => 'Clavo suelto',
+        'factor_cantidad'  => 100,
+        'factor_modo'      => EquivalenciaPresentacion::PorUnidadBase,
+    ]);
+
+    $venta = app(VentaService::class)->registrar(new DatosVenta([new LineaVenta($producto->id, 20, $suelto->id)]), $cajero);
+    $detalle = $venta->detalles()->sole();
+
+    // L 28 × 0.01 = L 0.28, pero un clavo nunca cuesta menos de L 1.
+    expect((float) $detalle->precio_unitario)->toBe(1.0)
+        ->and((float) $venta->total)->toBe(20.0)
+        ->and((float) $detalle->cantidad_base)->toBe(0.2)
+        ->and((float) $producto->refresh()->stock)->toBe(9.8);
+});
+
+it('descuenta exacto un clavo suelto aunque el factor no sea redondo', function (): void {
+    [$cajero] = cajeroConTurnoAbierto();
+    $producto = productoEnExistencia(10, ['precio_venta' => 28]);
+
+    $suelto = $producto->presentaciones()->create([
+        'unidad_medida_id' => UnidadMedida::factory()->create()->id,
+        'factor_cantidad'  => 80,
+        'factor_modo'      => EquivalenciaPresentacion::PorUnidadBase,
+    ]);
+
+    app(VentaService::class)->registrar(new DatosVenta([new LineaVenta($producto->id, 1, $suelto->id)]), $cajero);
+
+    // 1/80 de libra = 0.0125 lb (con 3 decimales se habrían descontado 0.013).
+    expect((float) $producto->refresh()->stock)->toBe(9.9875)
+        ->and((float) MovimientoInventario::query()->where('tipo', TipoMovimientoInventario::SalidaVenta)->sole()->cantidad)->toBe(0.0125);
+});
+
+it('no vende un producto con margen que todavía no tiene precio', function (): void {
+    [$cajero] = cajeroConTurnoAbierto();
+
+    // Entró al inventario sin pasar por la revisión de precios: sigue sin precio.
+    $producto = productoEnExistencia(10, ['margen_tipo' => TipoMargen::Porcentaje, 'margen_publico' => 30]);
+
+    expect(fn () => app(VentaService::class)->registrar(new DatosVenta([new LineaVenta($producto->id, 1)]), $cajero))
+        ->toThrow(VentaInvalidaException::class, 'todavía no tiene precio');
 });

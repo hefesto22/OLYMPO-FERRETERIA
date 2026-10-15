@@ -26,6 +26,11 @@ final class VentaInvalidaException extends GrupoOlympoException
         return new self("\"{$producto}\" se vende por {$unidad} completo: la cantidad no puede llevar decimales.");
     }
 
+    public static function sinPrecio(string $producto): self
+    {
+        return new self("\"{$producto}\" todavía no tiene precio: su precio se calcula con la primera compra o existencia inicial.");
+    }
+
     public static function presentacionInvalida(string $producto): self
     {
         return new self("La presentación elegida no corresponde a \"{$producto}\".");

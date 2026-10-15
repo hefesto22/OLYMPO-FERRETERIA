@@ -54,8 +54,8 @@ class CompraDetalle extends Model
     {
         return [
             'cantidad'            => 'decimal:3',
-            'factor'              => 'decimal:4',
-            'cantidad_base'       => 'decimal:3',
+            'factor'              => 'decimal:8',
+            'cantidad_base'       => 'decimal:6',
             'costo_unitario'      => 'decimal:4',
             'costo_unitario_base' => 'decimal:4',
             'tipo_isv'            => TipoIsv::class,
@@ -122,7 +122,7 @@ class CompraDetalle extends Model
         $this->forceFill([
             'producto_presentacion_id' => $presentacion?->id,
             'factor'                   => $factor,
-            'cantidad_base'            => round($cantidad * $factor, 3),
+            'cantidad_base'            => round($cantidad * $factor, 6),
             'costo_unitario_base'      => round($costo / $factor, 4),
             'tipo_isv'                 => $producto->tipo_isv,
             'subtotal'                 => $subtotal,

@@ -29,7 +29,8 @@ final class OpcionesProducto
     }
 
     /**
-     * Presentaciones activas del producto para un Select: [id => "Caja x100"].
+     * Presentaciones activas del producto para un Select:
+     * [id => "Caja x100 · 100 UND"] o [id => "Clavo suelto · 100 por LB"].
      *
      * @return array<int, string>
      */
@@ -48,7 +49,9 @@ final class OpcionesProducto
             ->orderBy('factor')
             ->get()
             ->mapWithKeys(fn (ProductoPresentacion $presentacion): array => [
-                $presentacion->id => $presentacion->etiqueta().' = '.cantidadFormato((float) $presentacion->factor).' '.$presentacion->producto->unidadMedida->abreviatura,
+                $presentacion->id => $presentacion->nombre !== null && $presentacion->nombre !== ''
+                    ? $presentacion->nombre.' · '.$presentacion->equivalencia()
+                    : $presentacion->etiqueta(),
             ])
             ->all();
     }

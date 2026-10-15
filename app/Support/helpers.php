@@ -179,9 +179,9 @@ if (! function_exists('cantidadFormato')) {
      *   cantidadFormato(12.5)      => "12.5"
      *   cantidadFormato(200)       => "200"
      *   cantidadFormato(1500.25)   => "1,500.25"
-     *   cantidadFormato(0.3333)    => "0.333"
+     *   cantidadFormato(0.0125)    => "0.0125"  (un clavo suelto, en libras)
      */
-    function cantidadFormato(float|int|string|null $valor, int $decimales = 3): string
+    function cantidadFormato(float|int|string|null $valor, int $decimales = 6): string
     {
         $numero = number_format((float) $valor, $decimales, '.', ',');
 

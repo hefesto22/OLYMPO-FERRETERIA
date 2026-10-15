@@ -32,8 +32,14 @@ use LogicException;
  */
 final class InventarioService
 {
-    /** Tolerancia para comparar cantidades con 3 decimales. */
-    private const EPSILON = 0.0005;
+    /**
+     * Tolerancia para comparar cantidades. Las existencias van a 6
+     * decimales para que un clavo suelto (1/80 de libra = 0.0125 lb)
+     * descuente exacto.
+     */
+    private const EPSILON = 0.0000005;
+
+    private const DECIMALES = 6;
 
     public function registrarEntrada(
         Producto $producto,
@@ -58,7 +64,7 @@ final class InventarioService
 
             $stockAnterior = (float) $bloqueado->stock;
             $costoAnterior = (float) $bloqueado->costo_promedio;
-            $stockNuevo = round($stockAnterior + $cantidad, 3);
+            $stockNuevo = round($stockAnterior + $cantidad, self::DECIMALES);
             $costoUnitario = round(max($costoUnitario, 0.0), 4);
             $costoNuevo = $this->costoPromedioTrasEntrada($stockAnterior, $costoAnterior, $cantidad, $costoUnitario);
 
@@ -127,7 +133,7 @@ final class InventarioService
                 );
             }
 
-            $stockNuevo = round($stockAnterior - $cantidad, 3);
+            $stockNuevo = round($stockAnterior - $cantidad, self::DECIMALES);
             $costoMovimiento = round($costoUnitario ?? $costoAnterior, 4);
             $costoNuevo = $revertirCosto
                 ? $this->costoPromedioTrasReversion($stockAnterior, $costoAnterior, $cantidad, $costoMovimiento)
@@ -212,7 +218,7 @@ final class InventarioService
         return MovimientoInventario::query()->create([
             'producto_id'    => $producto->id,
             'tipo'           => $tipo,
-            'cantidad'       => round($cantidad, 3),
+            'cantidad'       => round($cantidad, self::DECIMALES),
             'stock_anterior' => $stockAnterior,
             'stock_nuevo'    => $stockNuevo,
             'costo_unitario' => $costoUnitario,

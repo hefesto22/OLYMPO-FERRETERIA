@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 use App\Filament\Resources\AjustesInventario\AjusteInventarioResource;
+use App\Filament\Resources\CambiosPrecio\CambioPrecioResource;
 use App\Filament\Resources\Compras\CompraResource;
 use App\Filament\Resources\TurnosCaja\TurnoCajaResource;
 use App\Filament\Resources\Ventas\VentaResource;
@@ -181,11 +182,13 @@ return [
                 'delete',
             ],
             // Acciones propias del negocio → permisos Confirmar:Compra, Anular:Compra,
-            // Aplicar:AjusteInventario, Anular:Venta y Cerrar:TurnoCaja (se suman a los default).
+            // Aplicar:AjusteInventario, Anular:Venta, Cerrar:TurnoCaja y
+            // Aprobar:CambioPrecio (se suman a los default).
             CompraResource::class           => ['confirmar', 'anular'],
             AjusteInventarioResource::class => ['aplicar'],
             VentaResource::class            => ['anular'],
             TurnoCajaResource::class        => ['cerrar'],
+            CambioPrecioResource::class     => ['aprobar'],
         ],
         'exclude' => [
             //

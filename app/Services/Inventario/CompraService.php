@@ -9,6 +9,7 @@ use App\Enums\EstadoDocumento;
 use App\Enums\TipoMovimientoInventario;
 use App\Models\Compra;
 use App\Models\CompraDetalle;
+use App\Services\Precios\PrecioService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -19,6 +20,7 @@ final class CompraService
 {
     public function __construct(
         private readonly InventarioService $inventario,
+        private readonly PrecioService $precios,
     ) {}
 
     /**
@@ -75,6 +77,9 @@ final class CompraService
 
             $this->recalcularTotales($compra);
 
+            // Con el costo nuevo: los precios con margen suben solos; si bajan, esperan al dueño.
+            $this->precios->revisar($this->productoIds($compra), "Compra {$compra->numero}");
+
             $compra->forceFill([
                 'estado'         => EstadoDocumento::Confirmado,
                 'confirmada_at'  => now(),
@@ -113,6 +118,8 @@ final class CompraService
                 );
             }
 
+            $this->precios->revisar($this->productoIds($compra), "Anulación de la compra {$compra->numero}");
+
             $compra->forceFill([
                 'estado'           => EstadoDocumento::Anulado,
                 'anulada_at'       => now(),
@@ -122,5 +129,13 @@ final class CompraService
 
             return $compra;
         });
+    }
+
+    /**
+     * @return array<int, int>
+     */
+    private function productoIds(Compra $compra): array
+    {
+        return $compra->detalles->map(fn (CompraDetalle $detalle): int => $detalle->producto_id)->all();
     }
 }

@@ -59,9 +59,9 @@ class MovimientoInventario extends Model
     {
         return [
             'tipo'           => TipoMovimientoInventario::class,
-            'cantidad'       => 'decimal:3',
-            'stock_anterior' => 'decimal:3',
-            'stock_nuevo'    => 'decimal:3',
+            'cantidad'       => 'decimal:6',
+            'stock_anterior' => 'decimal:6',
+            'stock_nuevo'    => 'decimal:6',
             'costo_unitario' => 'decimal:4',
             'costo_promedio' => 'decimal:4',
             'documento_id'   => 'integer',

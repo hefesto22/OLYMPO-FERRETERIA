@@ -10,6 +10,8 @@ use App\Enums\MotivoAjuste;
 use App\Enums\TipoAjuste;
 use App\Enums\TipoMovimientoInventario;
 use App\Models\AjusteInventario;
+use App\Models\AjusteInventarioDetalle;
+use App\Services\Precios\PrecioService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
@@ -22,6 +24,7 @@ final class AjusteInventarioService
 {
     public function __construct(
         private readonly InventarioService $inventario,
+        private readonly PrecioService $precios,
     ) {}
 
     public function aplicar(AjusteInventario $ajuste): AjusteInventario
@@ -60,6 +63,14 @@ final class AjusteInventarioService
                 }
 
                 $this->inventario->registrarSalida($producto, $cantidad, TipoMovimientoInventario::AjusteSalida, $ajuste, $descripcion);
+            }
+
+            // Una entrada con costo mueve el promedio: los precios con margen se revisan.
+            if ($ajuste->tipo === TipoAjuste::Entrada) {
+                $this->precios->revisar(
+                    $ajuste->detalles->map(fn (AjusteInventarioDetalle $detalle): int => $detalle->producto_id)->all(),
+                    $descripcion,
+                );
             }
 
             $ajuste->forceFill([

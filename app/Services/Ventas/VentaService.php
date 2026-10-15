@@ -26,6 +26,7 @@ use App\Models\Venta;
 use App\Models\VentaDetalle;
 use App\Models\VentaPago;
 use App\Services\Inventario\InventarioService;
+use App\Services\Precios\PrecioService;
 use App\Services\Ventas\Datos\DatosVenta;
 use App\Services\Ventas\Datos\LineaVenta;
 use App\Support\Ventas\CalculadoraVenta;
@@ -49,6 +50,7 @@ final class VentaService
     public function __construct(
         private readonly InventarioService $inventario,
         private readonly NumeracionService $numeracion,
+        private readonly PrecioService $precios,
     ) {}
 
     public function registrar(DatosVenta $datos, User $cajero): Venta
@@ -128,6 +130,12 @@ final class VentaService
                 );
             }
 
+            // Lo devuelto entra a su costo de salida y puede mover el promedio.
+            $this->precios->revisar(
+                $venta->detalles->map(fn (VentaDetalle $detalle): int => $detalle->producto_id)->all(),
+                "Anulación de la venta {$venta->numero}",
+            );
+
             $venta->forceFill([
                 'estado'           => EstadoVenta::Anulada,
                 'anulada_at'       => now(),
@@ -189,6 +197,12 @@ final class VentaService
 
             $factor = $presentacion !== null ? (float) $presentacion->factor : 1.0;
             $precio = PrecioProducto::unitario($producto, $presentacion, $datos->listaPrecio);
+
+            // Un producto con margen que aún no tiene costo no tiene precio.
+            if ($precio <= 0) {
+                throw VentaInvalidaException::sinPrecio($producto->nombre);
+            }
+
             $calculo = CalculadoraVenta::linea($precio, $linea->cantidad, $linea->descuentoPct, $producto->tipo_isv->tasa());
 
             $resultado[] = [
@@ -197,7 +211,7 @@ final class VentaService
                 'unidad'        => $presentacion !== null ? $presentacion->etiqueta() : $producto->unidadMedida->nombre,
                 'cantidad'      => $linea->cantidad,
                 'factor'        => $factor,
-                'cantidad_base' => round($linea->cantidad * $factor, 3),
+                'cantidad_base' => round($linea->cantidad * $factor, 6),
                 'precio'        => $precio,
                 'descuento_pct' => $linea->descuentoPct,
                 'tipo_isv'      => $producto->tipo_isv,

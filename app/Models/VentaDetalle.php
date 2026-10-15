@@ -47,8 +47,8 @@ class VentaDetalle extends Model
     {
         return [
             'cantidad'            => 'decimal:3',
-            'factor'              => 'decimal:4',
-            'cantidad_base'       => 'decimal:3',
+            'factor'              => 'decimal:8',
+            'cantidad_base'       => 'decimal:6',
             'precio_unitario'     => 'decimal:2',
             'descuento_pct'       => 'decimal:2',
             'descuento'           => 'decimal:2',

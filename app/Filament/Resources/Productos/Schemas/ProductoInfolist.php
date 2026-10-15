@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Productos\Schemas;
 
+use App\Enums\ListaPrecio;
+use App\Enums\TipoMargen;
 use App\Models\Producto;
 use App\Models\ProductoPresentacion;
+use App\Support\Ventas\PrecioProducto;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\ImageEntry;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -76,19 +79,37 @@ class ProductoInfolist
                         TextEntry::make('tipo_isv')
                             ->label('ISV')
                             ->badge(),
+                        TextEntry::make('margen_tipo')
+                            ->label('Cómo se calcula')
+                            ->badge()
+                            ->color('gray'),
+                        TextEntry::make('margen_publico')
+                            ->label('Margen público')
+                            ->state(fn (Producto $record): string => self::margen($record, $record->margen_publico))
+                            ->visible(fn (Producto $record): bool => $record->usaMargen()),
+                        TextEntry::make('margen_mayoreo')
+                            ->label('Margen mayoreo')
+                            ->state(fn (Producto $record): string => self::margen($record, $record->margen_mayoreo))
+                            ->visible(fn (Producto $record): bool => $record->usaMargen()),
                         TextEntry::make('costo_promedio')
                             ->label('Costo promedio (sin ISV)')
                             ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state, 4)),
                         TextEntry::make('ultimo_costo')
                             ->label('Último costo (sin ISV)')
                             ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state, 4)),
-                        TextEntry::make('margen')
-                            ->label('Margen')
+                        TextEntry::make('ganancia')
+                            ->label('Ganancia sobre el costo')
                             ->state(function (Producto $record): string {
-                                $margen = $record->margen();
+                                $ganancia = $record->gananciaSobreCosto();
 
-                                return $margen !== null ? porcentaje($margen, 1) : '—';
+                                return $ganancia !== null ? porcentaje($ganancia, 1) : '—';
                             }),
+                        TextEntry::make('costo_precio')
+                            ->label('Costo con que se calculó el precio')
+                            ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state, 4))
+                            ->helperText('Si el costo promedio bajó y el precio sigue igual, hay un cambio de precio por revisar.')
+                            ->visible(fn (Producto $record): bool => $record->usaMargen()
+                                && abs((float) $record->costo_precio - (float) $record->costo_promedio) >= 0.0001),
                     ]),
 
                 Section::make('Existencias')
@@ -122,23 +143,37 @@ class ProductoInfolist
                             ->hiddenLabel()
                             ->table([
                                 TableColumn::make('Presentación'),
-                                TableColumn::make('Contiene'),
+                                TableColumn::make('Equivale a'),
                                 TableColumn::make('Código de barras'),
                                 TableColumn::make('Precio (ISV incl.)'),
                             ])
                             ->schema([
                                 TextEntry::make('etiqueta')
                                     ->state(fn (ProductoPresentacion $record): string => $record->etiqueta()),
-                                TextEntry::make('factor')
-                                    ->formatStateUsing(fn (mixed $state, ProductoPresentacion $record): string => cantidadFormato((float) $state).' '.$record->producto->unidadMedida->abreviatura),
+                                TextEntry::make('equivalencia')
+                                    ->state(fn (ProductoPresentacion $record): string => $record->equivalencia()),
                                 TextEntry::make('codigo_barras')
                                     ->placeholder('—'),
                                 TextEntry::make('precio_venta')
-                                    ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state))
-                                    ->placeholder('Precio base × factor'),
+                                    ->state(fn (ProductoPresentacion $record): string => lempiras(PrecioProducto::unitario($record->producto, $record, ListaPrecio::Publico)))
+                                    ->helperText(fn (ProductoPresentacion $record): ?string => $record->precio_venta === null ? 'Automático' : null),
                             ]),
                     ]),
             ]);
+    }
+
+    /**
+     * "30 %" o "L. 5.00 por LB", según el tipo de margen.
+     */
+    private static function margen(Producto $producto, ?string $valor): string
+    {
+        if ($valor === null) {
+            return '—';
+        }
+
+        return $producto->margen_tipo === TipoMargen::Monto
+            ? lempiras((float) $valor).' por '.$producto->unidadMedida->abreviatura
+            : cantidadFormato((float) $valor, 2).' %';
     }
 
     public static function colorExistencia(Producto $producto): string
