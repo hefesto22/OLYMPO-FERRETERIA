@@ -314,6 +314,30 @@ class Producto extends Model
     }
 
     /**
+     * Precio con margen de una presentación sin precio propio: con su
+     * margen propio (público) o el del producto, sobre el costo de lo que
+     * lleva. El margen propio en lempiras es por presentación ("a la caja
+     * le gano L 150"); el del producto, por unidad base. El mayoreo usa
+     * siempre el margen mayoreo del producto.
+     */
+    public function precioPresentacionConMargen(float $costoBase, ProductoPresentacion $presentacion, bool $mayoreo = false): ?float
+    {
+        $factor = (float) $presentacion->factor;
+
+        if ($mayoreo || $presentacion->margen === null || ! $this->usaMargen()) {
+            return $this->precioConMargen($costoBase, $mayoreo, $factor);
+        }
+
+        $margen = (float) $presentacion->margen;
+
+        if ($this->margen_tipo === TipoMargen::Monto) {
+            $margen = $factor > 0 ? $margen / $factor : 0.0;
+        }
+
+        return CalculadoraPrecio::precio($costoBase, $this->margen_tipo, $margen, $this->tipo_isv->tasa(), $factor);
+    }
+
+    /**
      * Fija precio público y mayoreo con el margen sobre `costo_precio`.
      * Sin costo todavía, el precio queda en 0 (no se puede vender) hasta
      * la primera compra o existencia inicial.

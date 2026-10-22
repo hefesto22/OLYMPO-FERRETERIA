@@ -6,6 +6,7 @@ namespace App\Models;
 
 use App\Enums\EstadoVenta;
 use App\Enums\ListaPrecio;
+use App\Enums\TipoDescuento;
 use App\Enums\TipoDocumentoVenta;
 use App\Support\NumeroALetras;
 use Illuminate\Database\Eloquent\Collection;
@@ -38,6 +39,9 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $cai_fecha_limite
  * @property array<string, string|null>|null $datos_emisor
  * @property string $descuento
+ * @property TipoDescuento|null $descuento_global_tipo
+ * @property string $descuento_global_valor
+ * @property string $descuento_global
  * @property string $importe_exento
  * @property string $importe_gravado_15
  * @property string $importe_gravado_18
@@ -82,22 +86,25 @@ class Venta extends Model
     protected function casts(): array
     {
         return [
-            'tipo_documento'     => TipoDocumentoVenta::class,
-            'lista_precio'       => ListaPrecio::class,
-            'estado'             => EstadoVenta::class,
-            'cai_fecha_limite'   => 'date',
-            'datos_emisor'       => 'array',
-            'descuento'          => 'decimal:2',
-            'importe_exento'     => 'decimal:2',
-            'importe_gravado_15' => 'decimal:2',
-            'importe_gravado_18' => 'decimal:2',
-            'isv_15'             => 'decimal:2',
-            'isv_18'             => 'decimal:2',
-            'subtotal'           => 'decimal:2',
-            'total'              => 'decimal:2',
-            'efectivo_recibido'  => 'decimal:2',
-            'cambio'             => 'decimal:2',
-            'anulada_at'         => 'datetime',
+            'tipo_documento'         => TipoDocumentoVenta::class,
+            'lista_precio'           => ListaPrecio::class,
+            'estado'                 => EstadoVenta::class,
+            'cai_fecha_limite'       => 'date',
+            'datos_emisor'           => 'array',
+            'descuento'              => 'decimal:2',
+            'descuento_global_tipo'  => TipoDescuento::class,
+            'descuento_global_valor' => 'decimal:2',
+            'descuento_global'       => 'decimal:2',
+            'importe_exento'         => 'decimal:2',
+            'importe_gravado_15'     => 'decimal:2',
+            'importe_gravado_18'     => 'decimal:2',
+            'isv_15'                 => 'decimal:2',
+            'isv_18'                 => 'decimal:2',
+            'subtotal'               => 'decimal:2',
+            'total'                  => 'decimal:2',
+            'efectivo_recibido'      => 'decimal:2',
+            'cambio'                 => 'decimal:2',
+            'anulada_at'             => 'datetime',
         ];
     }
 
@@ -175,6 +182,17 @@ class Venta extends Model
     public function estaAnulada(): bool
     {
         return $this->estado === EstadoVenta::Anulada;
+    }
+
+    /**
+     * "Descuento a toda la venta 10 %" o, si fue en lempiras, sin el
+     * porcentaje (el monto va al lado).
+     */
+    public function etiquetaDescuentoGlobal(): string
+    {
+        return $this->descuento_global_tipo === TipoDescuento::Porcentaje
+            ? 'Descuento a toda la venta '.cantidadFormato((float) $this->descuento_global_valor, 2).' %'
+            : 'Descuento a toda la venta';
     }
 
     public function totalEnLetras(): string

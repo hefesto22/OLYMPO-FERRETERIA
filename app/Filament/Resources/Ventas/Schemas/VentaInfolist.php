@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\Ventas\Schemas;
 
+use App\Enums\TipoDescuento;
 use App\Models\Venta;
 use App\Models\VentaDetalle;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -99,9 +100,7 @@ class VentaInfolist
                                 TextEntry::make('precio_unitario')
                                     ->formatStateUsing($dinero),
                                 TextEntry::make('descuento')
-                                    ->state(fn (VentaDetalle $record): string => (float) $record->descuento > 0
-                                        ? lempiras((float) $record->descuento).' ('.cantidadFormato((float) $record->descuento_pct, 2).' %)'
-                                        : '—'),
+                                    ->state(fn (VentaDetalle $record): string => self::descuentoDeLinea($record)),
                                 TextEntry::make('tipo_isv')
                                     ->badge(),
                                 TextEntry::make('total')
@@ -118,6 +117,10 @@ class VentaInfolist
                             ->columns(2)
                             ->schema([
                                 TextEntry::make('descuento')->label('Descuentos')->formatStateUsing($dinero),
+                                TextEntry::make('descuento_global')
+                                    ->label(fn (Venta $record): string => $record->etiquetaDescuentoGlobal())
+                                    ->formatStateUsing($dinero)
+                                    ->visible(fn (Venta $record): bool => (float) $record->descuento_global > 0),
                                 TextEntry::make('importe_exento')->label('Importe exento')->formatStateUsing($dinero),
                                 TextEntry::make('importe_gravado_15')->label('Importe gravado 15 %')->formatStateUsing($dinero),
                                 TextEntry::make('isv_15')->label('ISV 15 %')->formatStateUsing($dinero),
@@ -155,5 +158,26 @@ class VentaInfolist
                             ]),
                     ]),
             ]);
+    }
+
+    /**
+     * "L. 20.00 (5 %)", "L. 20.00" si fue en lempiras, y la parte del
+     * descuento a toda la venta aparte: "L. 20.00 (5 %) + L. 8.00 del global".
+     */
+    private static function descuentoDeLinea(VentaDetalle $detalle): string
+    {
+        $partes = [];
+
+        if ($detalle->descuentoDeLinea() > 0) {
+            $partes[] = lempiras($detalle->descuentoDeLinea()).($detalle->descuento_tipo === TipoDescuento::Porcentaje
+                ? ' ('.cantidadFormato((float) $detalle->descuento_valor, 2).' %)'
+                : '');
+        }
+
+        if ((float) $detalle->descuento_global > 0) {
+            $partes[] = lempiras((float) $detalle->descuento_global).' del global';
+        }
+
+        return $partes !== [] ? implode(' + ', $partes) : '—';
     }
 }

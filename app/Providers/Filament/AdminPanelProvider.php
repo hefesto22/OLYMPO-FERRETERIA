@@ -8,15 +8,18 @@ use App\Http\Controllers\Tickets\TicketTurnoController;
 use App\Http\Controllers\Tickets\TicketVentaController;
 use App\Models\BrandingSetting;
 use BezhanSalleh\FilamentShield\FilamentShieldPlugin;
+use Filament\FontProviders\GoogleFontProvider;
 use Filament\Http\Middleware\Authenticate;
 use Filament\Http\Middleware\AuthenticateSession;
 use Filament\Http\Middleware\DisableBladeIconComponents;
 use Filament\Http\Middleware\DispatchServingFilamentEvent;
-use Filament\Pages\Dashboard;
 use Filament\Panel;
 use Filament\PanelProvider;
+use Filament\Resources\Resource;
 use Filament\Support\Colors\Color;
-use Filament\Widgets\AccountWidget;
+use Filament\Support\Enums\Width;
+use Filament\View\PanelsRenderHook;
+use Illuminate\Contracts\View\View;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
@@ -30,6 +33,9 @@ class AdminPanelProvider extends PanelProvider
 {
     public function panel(Panel $panel): Panel
     {
+        // En español solo va mayúscula al inicio: "Turnos de caja", no "Turnos De Caja".
+        Resource::titleCaseModelLabel(false);
+
         return $panel
             ->default()
             ->id('admin')
@@ -46,18 +52,19 @@ class AdminPanelProvider extends PanelProvider
             ->darkModeBrandLogo(fn (): ?string => self::brandingValue('logoUrl'))
             ->brandLogoHeight('2.5rem')
             ->favicon(fn (): ?string => self::brandingValue('faviconUrl'))
+            // ── Tema Olympo (estilo shadcn): grises zinc, letra Geist y el
+            // color de marca solo de acento. Estilos en resources/css/filament/admin/olympo.css.
             ->colors([
                 'primary' => self::primaryColorPalette(),
+                'gray'    => Color::Zinc,
             ])
+            ->font('Geist', url: 'https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap', provider: GoogleFontProvider::class)
+            ->sidebarWidth('16.5rem')
+            ->maxContentWidth(Width::ScreenTwoExtraLarge)
             ->discoverResources(in: app_path('Filament/Resources'), for: 'App\\Filament\\Resources')
+            // El escritorio (App\Filament\Pages\Escritorio) y sus widgets se descubren solos.
             ->discoverPages(in: app_path('Filament/Pages'), for: 'App\\Filament\\Pages')
-            ->pages([
-                Dashboard::class,
-            ])
             ->discoverWidgets(in: app_path('Filament/Widgets'), for: 'App\\Filament\\Widgets')
-            ->widgets([
-                AccountWidget::class,
-            ])
             ->middleware([
                 EncryptCookies::class,
                 AddQueuedCookiesToResponse::class,
@@ -86,6 +93,8 @@ class AdminPanelProvider extends PanelProvider
                 Route::get('tickets/ventas/{venta}', TicketVentaController::class)->name('tickets.venta');
                 Route::get('tickets/turnos/{turno}', TicketTurnoController::class)->name('tickets.turno');
             })
+            // Escáner de códigos con la cámara (teléfono o tablet), uno para todo el panel.
+            ->renderHook(PanelsRenderHook::BODY_END, fn (): View => view('filament.escaner-codigo'))
             // Orden de los grupos del menú lateral.
             ->navigationGroups([
                 'Ventas',

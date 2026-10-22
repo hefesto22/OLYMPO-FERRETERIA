@@ -1,11 +1,16 @@
 <?php
 
 declare(strict_types=1);
+use App\Filament\Pages\Escritorio;
 use App\Filament\Resources\AjustesInventario\AjusteInventarioResource;
 use App\Filament\Resources\CambiosPrecio\CambioPrecioResource;
 use App\Filament\Resources\Compras\CompraResource;
 use App\Filament\Resources\TurnosCaja\TurnoCajaResource;
 use App\Filament\Resources\Ventas\VentaResource;
+use App\Filament\Widgets\Pendientes;
+use App\Filament\Widgets\ResumenVentas;
+use App\Filament\Widgets\UltimasVentas;
+use App\Filament\Widgets\VentasPorDia;
 use BezhanSalleh\FilamentShield\Resources\Roles\RoleResource;
 use Filament\Pages\Dashboard;
 use Filament\Widgets\AccountWidget;
@@ -211,6 +216,8 @@ return [
         'prefix'  => 'view',
         'exclude' => [
             Dashboard::class,
+            // El escritorio lo ve todo usuario; cada widget revisa sus permisos.
+            Escritorio::class,
         ],
     ],
 
@@ -230,6 +237,11 @@ return [
         'prefix'  => 'view',
         'exclude' => [
             AccountWidget::class,
+            // Los del escritorio se muestran según el permiso de ver ventas, productos, precios o CAI.
+            Pendientes::class,
+            ResumenVentas::class,
+            UltimasVentas::class,
+            VentasPorDia::class,
             FilamentInfoWidget::class,
         ],
     ],

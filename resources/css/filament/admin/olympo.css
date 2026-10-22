@@ -1,0 +1,491 @@
+/*
+|--------------------------------------------------------------------------
+| Tema Olympo para Filament v5
+|--------------------------------------------------------------------------
+|
+| Estilo shadcn: base neutra (grises zinc del panel), tarjetas con borde
+| fino y casi sin sombra, y el color de marca de cada cliente solo como
+| acento (botón principal, ítem activo del menú, foco y gráficas). Por eso
+| sirve para cualquier sistema de la plantilla: el color sale de
+| BrandingSetting y los grises de ->colors(['gray' => Color::Zinc]).
+|
+| Todo va en la capa `components`, después de la de Filament: a igual
+| especificidad gana este archivo, y las utilidades de Tailwind en las
+| vistas propias siguen mandando sobre él.
+|
+*/
+
+@layer components {
+    :root {
+        --ol-fondo: var(--gray-50);
+        --ol-tarjeta: #fff;
+        --ol-borde: var(--gray-200);
+        --ol-borde-suave: var(--gray-100);
+        --ol-borde-campo: var(--gray-200);
+        --ol-campo: #fff;
+        --ol-tenue: var(--gray-500);
+        --ol-hover: var(--gray-100);
+        --ol-hover-fila: color-mix(in oklab, var(--gray-100) 55%, transparent);
+        --ol-sombra: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+        --ol-sombra-flotante: 0 12px 32px -8px rgb(0 0 0 / 0.14), 0 2px 6px -2px rgb(0 0 0 / 0.06);
+        --ol-anillo: color-mix(in oklab, var(--primary-500) 28%, transparent);
+    }
+
+    .dark {
+        --ol-fondo: var(--gray-950);
+        --ol-tarjeta: color-mix(in oklab, var(--gray-900) 55%, var(--gray-950));
+        --ol-borde: color-mix(in oklab, white 9%, transparent);
+        --ol-borde-suave: color-mix(in oklab, white 5%, transparent);
+        --ol-borde-campo: color-mix(in oklab, white 12%, transparent);
+        --ol-campo: color-mix(in oklab, var(--gray-800) 30%, transparent);
+        --ol-tenue: var(--gray-400);
+        --ol-hover: color-mix(in oklab, white 6%, transparent);
+        --ol-hover-fila: color-mix(in oklab, white 3%, transparent);
+        --ol-sombra: 0 0 #0000;
+        --ol-sombra-flotante: 0 16px 40px -8px rgb(0 0 0 / 0.6);
+        --ol-anillo: color-mix(in oklab, var(--primary-400) 30%, transparent);
+    }
+
+    /* ── Base ─────────────────────────────────────────────────────────── */
+
+    .fi-body {
+        background-color: var(--ol-fondo);
+        font-feature-settings: 'cv11', 'ss01';
+    }
+
+    /* Cifras del mismo ancho en tablas, totales y tarjetas de números. */
+    .fi-ta-cell,
+    .fi-wi-stats-overview-stat-value,
+    .fi-in-text {
+        font-variant-numeric: tabular-nums;
+    }
+
+    /* ── Barra superior: translúcida, con borde ───────────────────────── */
+
+    .fi-topbar {
+        background-color: color-mix(in oklab, var(--ol-fondo) 82%, transparent);
+        box-shadow: 0 1px 0 0 var(--ol-borde);
+        backdrop-filter: saturate(1.4) blur(10px);
+    }
+
+    .fi-topbar .fi-input-wrp {
+        background-color: var(--ol-tarjeta);
+    }
+
+    /* El avatar con iniciales es oscuro: en modo oscuro lleva un borde para verse. */
+    .dark .fi-user-avatar {
+        box-shadow: 0 0 0 1px color-mix(in oklab, white 22%, transparent);
+    }
+
+    /* ── Menú lateral ─────────────────────────────────────────────────── */
+
+    @media (max-width: 63.99rem) {
+        .fi-sidebar {
+            background-color: var(--ol-tarjeta);
+        }
+    }
+
+    @media (min-width: 64rem) {
+        .fi-body-has-topbar .fi-sidebar {
+            border-inline-end: 1px solid var(--ol-borde);
+        }
+    }
+
+    .fi-sidebar-nav {
+        row-gap: 1.25rem;
+        padding: 1.25rem 0.875rem;
+        scrollbar-width: thin;
+    }
+
+    .fi-sidebar-nav-groups {
+        row-gap: 1.25rem;
+        margin-inline: 0;
+    }
+
+    .fi-sidebar-group {
+        row-gap: 0.125rem;
+    }
+
+    .fi-sidebar-group-items {
+        row-gap: 0.125rem;
+    }
+
+    .fi-sidebar-group-btn {
+        padding: 0.25rem 0.625rem;
+    }
+
+    .fi-sidebar-group-label {
+        font-size: 0.75rem;
+        line-height: 1rem;
+        font-weight: 500;
+        color: var(--ol-tenue);
+    }
+
+    .fi-sidebar-item-btn {
+        gap: 0.625rem;
+        padding: 0.4375rem 0.625rem;
+        border-radius: 0.5rem;
+    }
+
+    .fi-sidebar-item-label {
+        font-weight: 500;
+        color: var(--gray-600);
+    }
+
+    .dark .fi-sidebar-item-label {
+        color: var(--gray-300);
+    }
+
+    .fi-sidebar-item.fi-sidebar-item-has-url > .fi-sidebar-item-btn:hover,
+    .fi-sidebar-item.fi-sidebar-item-has-url > .fi-sidebar-item-btn:focus-visible {
+        background-color: var(--ol-hover);
+    }
+
+    /* El activo: una pastilla como tarjeta; el ícono lleva el color de marca. */
+    .fi-sidebar-item.fi-active > .fi-sidebar-item-btn {
+        background-color: var(--ol-tarjeta);
+        box-shadow: 0 0 0 1px var(--ol-borde), var(--ol-sombra);
+    }
+
+    .fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-sidebar-item-label {
+        color: var(--gray-950);
+    }
+
+    .dark .fi-sidebar-item.fi-active > .fi-sidebar-item-btn > .fi-sidebar-item-label {
+        color: #fff;
+    }
+
+    /* ── Encabezado de página ─────────────────────────────────────────── */
+
+    .fi-page-header-main-ctn {
+        row-gap: 1.75rem;
+        padding-block: 1.75rem;
+    }
+
+    .fi-header-heading {
+        font-size: 1.625rem;
+        line-height: 2rem;
+        font-weight: 650;
+        letter-spacing: -0.025em;
+    }
+
+    .fi-header-subheading {
+        margin-top: 0.375rem;
+        font-size: 0.9375rem;
+        color: var(--ol-tenue);
+    }
+
+    .fi-breadcrumbs ol li {
+        font-size: 0.8125rem;
+    }
+
+    /* ── Tarjetas: secciones, tablas, números, ventanas ───────────────── */
+
+    .fi-section:not(.fi-section-not-contained):not(.fi-aside),
+    .fi-section:not(.fi-section-not-contained).fi-aside > .fi-section-content-ctn,
+    .fi-ta-ctn,
+    .fi-wi-stats-overview-stat,
+    .fi-simple-main {
+        background-color: var(--ol-tarjeta);
+        box-shadow: 0 0 0 1px var(--ol-borde), var(--ol-sombra);
+    }
+
+    .fi-section.fi-secondary:not(.fi-section-not-contained):not(.fi-aside) {
+        background-color: var(--ol-fondo);
+    }
+
+    .fi-section .fi-section-header-heading {
+        font-size: 0.9375rem;
+        letter-spacing: -0.01em;
+    }
+
+    .fi-modal > .fi-modal-window-ctn > .fi-modal-window {
+        background-color: var(--ol-tarjeta);
+        box-shadow: 0 0 0 1px var(--ol-borde), var(--ol-sombra-flotante);
+    }
+
+    .fi-dropdown .fi-dropdown-panel {
+        background-color: var(--ol-tarjeta);
+        border-radius: 0.625rem;
+        box-shadow: 0 0 0 1px var(--ol-borde), var(--ol-sombra-flotante);
+    }
+
+    /* ── Tablas: encabezado discreto, filas que se marcan al pasar ────── */
+
+    .fi-ta-table > thead > tr {
+        background-color: transparent;
+    }
+
+    .fi-ta-header-cell {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--ol-tenue);
+    }
+
+    .fi-ta-row.fi-clickable:hover {
+        background-color: var(--ol-hover-fila);
+    }
+
+    .fi-ta-ctn .fi-ta-content-ctn .fi-ta-record {
+        background-color: var(--ol-tarjeta);
+    }
+
+    /* ── Campos ───────────────────────────────────────────────────────── */
+
+    .fi-input-wrp {
+        background-color: var(--ol-campo);
+        box-shadow: 0 0 0 1px var(--ol-borde-campo), var(--ol-sombra);
+    }
+
+    .fi-input-wrp.fi-invalid {
+        box-shadow: 0 0 0 1px var(--danger-500), var(--ol-sombra);
+    }
+
+    .fi-input-wrp:not(.fi-disabled):not(:has(.fi-ac-action:focus)):focus-within {
+        box-shadow: 0 0 0 1px var(--primary-500), 0 0 0 4px var(--ol-anillo);
+    }
+
+    .fi-input-wrp:not(.fi-disabled):not(:has(.fi-ac-action:focus)).fi-invalid:focus-within {
+        box-shadow: 0 0 0 1px var(--danger-500), 0 0 0 4px color-mix(in oklab, var(--danger-500) 25%, transparent);
+    }
+
+    /* ── Botones ──────────────────────────────────────────────────────── */
+
+    .fi-btn {
+        font-weight: 500;
+    }
+
+    /* Secundarios (sin color): como el "outline" de shadcn. */
+    .fi-btn:not(.fi-outlined):not(.fi-color):not([aria-pressed]) {
+        background-color: var(--ol-tarjeta);
+        box-shadow: 0 0 0 1px var(--ol-borde), var(--ol-sombra);
+    }
+
+    .fi-btn.fi-outlined:not(.fi-color) {
+        box-shadow: 0 0 0 1px var(--ol-borde), var(--ol-sombra);
+    }
+
+    /* Alternar en gris (Recibo, Público): el elegido va oscuro, como el botón
+       principal de shadcn; el gris claro de Filament apenas se distingue. */
+    .fi-btn.fi-btn:not(.fi-outlined):not(.fi-color)[aria-pressed='true'],
+    input:checked + label.fi-btn.fi-btn:not(.fi-outlined):not(.fi-color) {
+        background-color: var(--gray-900);
+        color: #fff;
+
+        & > .fi-icon {
+            color: inherit;
+        }
+
+        &:not(.fi-disabled):not([disabled]):hover {
+            background-color: var(--gray-800);
+        }
+    }
+
+    .dark .fi-btn.fi-btn:not(.fi-outlined):not(.fi-color)[aria-pressed='true'],
+    .dark input:checked + label.fi-btn.fi-btn:not(.fi-outlined):not(.fi-color) {
+        background-color: var(--gray-100);
+        color: var(--gray-950);
+
+        &:not(.fi-disabled):not([disabled]):hover {
+            background-color: var(--gray-200);
+        }
+    }
+
+    /* Grupos de botones un poco más compactos: en la caja caben dos lado a lado. */
+    .fi-btn-group > .fi-btn.fi-size-md {
+        padding-inline: 0.625rem;
+    }
+
+    /* Foco visible en todos los botones (las reglas de arriba cambian su sombra). */
+    .fi-btn.fi-btn:not(.fi-disabled):not([disabled]):focus-visible {
+        box-shadow: 0 0 0 2px var(--ol-fondo), 0 0 0 4px color-mix(in oklab, var(--primary-500) 55%, transparent);
+    }
+
+    /* ── Pestañas: un riel gris con la activa como tarjeta ────────────── */
+
+    .fi-tabs:not(.fi-contained) {
+        gap: 0.25rem;
+        padding: 0.25rem;
+        border-radius: 0.625rem;
+        background-color: var(--gray-100);
+        box-shadow: none;
+    }
+
+    .dark .fi-tabs:not(.fi-contained) {
+        background-color: color-mix(in oklab, white 5%, transparent);
+    }
+
+    .fi-tabs-item {
+        padding: 0.375rem 0.75rem;
+        border-radius: 0.5rem;
+    }
+
+    .fi-tabs-item.fi-active {
+        background-color: var(--ol-tarjeta);
+        box-shadow: 0 0 0 1px var(--ol-borde), var(--ol-sombra);
+    }
+
+    .fi-tabs-item.fi-active .fi-tabs-item-label {
+        color: var(--gray-950);
+    }
+
+    .dark .fi-tabs-item.fi-active .fi-tabs-item-label {
+        color: #fff;
+    }
+
+    /* ── Escritorio: tarjetas de números y gráficas ───────────────────── */
+
+    .fi-wi-stats-overview-stat {
+        padding: 1.25rem;
+    }
+
+    .fi-wi-stats-overview-stat:has(.fi-wi-stats-overview-stat-chart) {
+        padding-bottom: 3.25rem;
+    }
+
+    .fi-wi-stats-overview-stat .fi-wi-stats-overview-stat-label {
+        font-size: 0.8125rem;
+    }
+
+    .fi-wi-stats-overview-stat .fi-wi-stats-overview-stat-value {
+        font-size: 1.75rem;
+        font-weight: 650;
+        letter-spacing: -0.03em;
+    }
+
+    .fi-wi-stats-overview-stat .fi-wi-stats-overview-stat-description {
+        font-size: 0.8125rem;
+    }
+
+    .fi-wi-stats-overview-stat .fi-wi-stats-overview-stat-chart > canvas {
+        height: 2.5rem;
+    }
+
+    /* Barras con el color de marca, casi lleno. */
+    .fi-wi-chart .fi-color .fi-wi-chart-bg-color {
+        color: color-mix(in oklab, var(--color-500) 85%, transparent);
+    }
+
+    .fi-wi-chart .fi-wi-chart-grid-color {
+        color: var(--ol-borde-suave);
+    }
+
+    .fi-wi-chart .fi-wi-chart-tooltip-bg-color {
+        color: var(--gray-950);
+    }
+
+    .dark .fi-wi-chart .fi-wi-chart-tooltip-bg-color {
+        color: var(--gray-800);
+    }
+
+    /* Widget de pendientes del Escritorio. */
+    .ol-pendientes {
+        display: grid;
+        margin: -0.5rem -0.75rem;
+    }
+
+    .ol-pendientes > li + li {
+        border-top: 1px solid var(--ol-borde-suave);
+    }
+
+    .ol-pendiente {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem;
+        border-radius: 0.5rem;
+    }
+
+    .ol-pendiente:hover {
+        background-color: var(--ol-hover-fila);
+    }
+
+    .ol-pendiente__icono {
+        display: grid;
+        place-items: center;
+        flex: none;
+        width: 2.25rem;
+        height: 2.25rem;
+        border-radius: 0.5rem;
+        background-color: var(--ol-hover);
+        color: var(--ol-tenue);
+    }
+
+    .ol-pendiente__icono svg {
+        width: 1.125rem;
+        height: 1.125rem;
+    }
+
+    .ol-pendiente__icono.es-aviso {
+        background-color: color-mix(in oklab, var(--warning-500) 14%, transparent);
+        color: var(--warning-600);
+    }
+
+    .ol-pendiente__icono.es-alerta {
+        background-color: color-mix(in oklab, var(--danger-500) 12%, transparent);
+        color: var(--danger-600);
+    }
+
+    .dark .ol-pendiente__icono.es-aviso {
+        color: var(--warning-400);
+    }
+
+    .dark .ol-pendiente__icono.es-alerta {
+        color: var(--danger-400);
+    }
+
+    .ol-pendiente__texto {
+        display: grid;
+        flex: 1;
+        min-width: 0;
+        gap: 0.125rem;
+        font-size: 0.8125rem;
+        color: var(--ol-tenue);
+    }
+
+    .ol-pendiente__texto strong {
+        font-size: 0.875rem;
+        font-weight: 600;
+        color: var(--gray-950);
+    }
+
+    .dark .ol-pendiente__texto strong {
+        color: #fff;
+    }
+
+    .ol-por-pedir {
+        display: grid;
+        gap: 0.375rem;
+        margin: 0 0.75rem 0.75rem 3.75rem;
+        font-size: 0.8125rem;
+    }
+
+    .ol-por-pedir li {
+        display: flex;
+        justify-content: space-between;
+        gap: 0.75rem;
+    }
+
+    .ol-por-pedir__nombre {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .ol-por-pedir__cifra {
+        flex: none;
+        font-weight: 600;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .ol-por-pedir__cifra small {
+        font-weight: 400;
+        color: var(--ol-tenue);
+    }
+
+    /* ── Entrada (login) ──────────────────────────────────────────────── */
+
+    .fi-simple-main {
+        border-radius: 0.875rem;
+    }
+}

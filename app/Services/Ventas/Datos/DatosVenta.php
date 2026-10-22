@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Services\Ventas\Datos;
 
 use App\Enums\ListaPrecio;
+use App\Enums\TipoDescuento;
 use App\Enums\TipoDocumentoVenta;
 
 /**
@@ -15,6 +16,7 @@ final readonly class DatosVenta
     /**
      * @param list<LineaVenta> $lineas
      * @param float|null $efectivoRecibido null = el cliente pagó el efectivo exacto
+     * @param float $descuentoGlobal descuento a toda la venta (% o lempiras), aparte del de cada línea
      */
     public function __construct(
         public array $lineas,
@@ -29,5 +31,7 @@ final readonly class DatosVenta
         public float $montoTransferencia = 0.0,
         public ?string $referenciaTransferencia = null,
         public ?string $notas = null,
+        public float $descuentoGlobal = 0.0,
+        public TipoDescuento $tipoDescuentoGlobal = TipoDescuento::Porcentaje,
     ) {}
 }

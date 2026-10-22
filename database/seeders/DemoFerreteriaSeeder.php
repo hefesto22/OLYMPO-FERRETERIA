@@ -29,13 +29,14 @@ class DemoFerreteriaSeeder extends Seeder
 {
     /**
      * cat, marca, und, precio (ISV incl.), mayoreo, costo (sin ISV, por unidad base),
-     * stock inicial, mínimo, presentaciones [und, cantidad, nombre, precio, forma].
+     * stock inicial, mínimo, presentaciones [und, cantidad, nombre, precio, forma, margen].
      *
      * Con `margen` [% público, % mayoreo] el precio sale del costo y los
      * valores de precio/mayoreo se ignoran. Una presentación con precio null
-     * usa el precio automático; forma 'por_base' = "100 por LB".
+     * usa el precio automático (con su margen propio si lo trae); forma
+     * 'por_base' = "100 por LB".
      *
-     * @var array<string, array{cat: string, marca: string|null, und: string, precio: float|int, mayoreo: float|int|null, costo: float|int, stock: float|int, min: float|int, margen?: array{0: float|int, 1: float|int|null}, pres?: list<array{0: string, 1: float|int, 2: string, 3: float|int|null, 4?: string}>, servicio?: bool}>
+     * @var array<string, array{cat: string, marca: string|null, und: string, precio: float|int, mayoreo: float|int|null, costo: float|int, stock: float|int, min: float|int, margen?: array{0: float|int, 1: float|int|null}, pres?: list<array{0: string, 1: float|int, 2: string, 3: float|int|null, 4?: string, 5?: float|int}>, servicio?: bool}>
      */
     private const PRODUCTOS = [
         'Cemento gris uso general 42.5 kg' => ['cat' => 'Materiales de construcción', 'marca' => null, 'und' => 'BLS', 'precio' => 245.00, 'mayoreo' => 235.00, 'costo' => 185.00, 'stock' => 120, 'min' => 30],
@@ -43,10 +44,10 @@ class DemoFerreteriaSeeder extends Seeder
         'Varilla corrugada 3/8" x 6 m'     => ['cat' => 'Hierro y acero', 'marca' => null, 'und' => 'VAR', 'precio' => 165.00, 'mayoreo' => 158.00, 'costo' => 122.00, 'stock' => 150, 'min' => 40],
         'Varilla corrugada 1/2" x 6 m'     => ['cat' => 'Hierro y acero', 'marca' => null, 'und' => 'VAR', 'precio' => 290.00, 'mayoreo' => 279.00, 'costo' => 215.00, 'stock' => 80, 'min' => 20],
         'Alambre de amarre #16'            => ['cat' => 'Hierro y acero', 'marca' => null, 'und' => 'LB', 'precio' => 32.00, 'mayoreo' => 29.00, 'costo' => 22.50, 'stock' => 220, 'min' => 50, 'pres' => [['RLL', 50, 'Rollo 50 lb', 1450.00]]],
-        'Clavo con cabeza 2 1/2"'          => ['cat' => 'Tornillería y fijaciones', 'marca' => null, 'und' => 'LB', 'precio' => 0, 'mayoreo' => null, 'costo' => 18.80, 'stock' => 150, 'min' => 40, 'margen' => [30, 20], 'pres' => [['CJ', 50, 'Caja 50 lb', 1250.00], ['BLS', 1, 'Bolsa 1 lb', null], ['UND', 100, 'Clavo suelto', null, 'por_base']]],
-        'Clavo con cabeza 3"'              => ['cat' => 'Tornillería y fijaciones', 'marca' => null, 'und' => 'LB', 'precio' => 0, 'mayoreo' => null, 'costo' => 18.50, 'stock' => 140, 'min' => 40, 'margen' => [30, 20], 'pres' => [['CJ', 50, 'Caja 50 lb', 1225.00], ['BLS', 1, 'Bolsa 1 lb', null], ['UND', 80, 'Clavo suelto', null, 'por_base']]],
-        'Tornillo para tablayeso 6 x 1"'   => ['cat' => 'Tornillería y fijaciones', 'marca' => null, 'und' => 'UND', 'precio' => 0, 'mayoreo' => null, 'costo' => 0.42, 'stock' => 5000, 'min' => 1000, 'margen' => [60, null], 'pres' => [['BLS', 100, 'Bolsa x100', 65.00], ['CJ', 1000, 'Caja x1000', 550.00]]],
-        'Tornillo goloso 8 x 1 1/2"'       => ['cat' => 'Tornillería y fijaciones', 'marca' => null, 'und' => 'UND', 'precio' => 0, 'mayoreo' => null, 'costo' => 0.70, 'stock' => 3000, 'min' => 500, 'margen' => [50, null], 'pres' => [['CJ', 100, 'Caja x100', 110.00]]],
+        'Clavo con cabeza 2 1/2"'          => ['cat' => 'Tornillería y fijaciones', 'marca' => null, 'und' => 'LB', 'precio' => 0, 'mayoreo' => null, 'costo' => 18.80, 'stock' => 150, 'min' => 40, 'margen' => [30, 20], 'pres' => [['CJ', 50, 'Caja 50 lb', null, 'contiene', 15], ['BLS', 1, 'Bolsa 1 lb', null], ['UND', 100, 'Clavo suelto', null, 'por_base']]],
+        'Clavo con cabeza 3"'              => ['cat' => 'Tornillería y fijaciones', 'marca' => null, 'und' => 'LB', 'precio' => 0, 'mayoreo' => null, 'costo' => 18.50, 'stock' => 140, 'min' => 40, 'margen' => [30, 20], 'pres' => [['CJ', 50, 'Caja 50 lb', null, 'contiene', 15], ['BLS', 1, 'Bolsa 1 lb', null], ['UND', 80, 'Clavo suelto', null, 'por_base']]],
+        'Tornillo para tablayeso 6 x 1"'   => ['cat' => 'Tornillería y fijaciones', 'marca' => null, 'und' => 'UND', 'precio' => 0, 'mayoreo' => null, 'costo' => 0.42, 'stock' => 5000, 'min' => 1000, 'margen' => [60, null], 'pres' => [['BLS', 100, 'Bolsa x100', null, 'contiene', 40], ['CJ', 1000, 'Caja x1000', null, 'contiene', 30]]],
+        'Tornillo goloso 8 x 1 1/2"'       => ['cat' => 'Tornillería y fijaciones', 'marca' => null, 'und' => 'UND', 'precio' => 0, 'mayoreo' => null, 'costo' => 0.70, 'stock' => 3000, 'min' => 500, 'margen' => [50, null], 'pres' => [['CJ', 100, 'Caja x100', null, 'contiene', 35]]],
         'Cable THHN #12'                   => ['cat' => 'Electricidad', 'marca' => null, 'und' => 'M', 'precio' => 19.00, 'mayoreo' => 17.00, 'costo' => 12.80, 'stock' => 600, 'min' => 100, 'pres' => [['RLL', 100, 'Rollo 100 m', 1650.00]]],
         'Cable THHN #10'                   => ['cat' => 'Electricidad', 'marca' => null, 'und' => 'M', 'precio' => 27.00, 'mayoreo' => 25.00, 'costo' => 18.90, 'stock' => 400, 'min' => 100, 'pres' => [['RLL', 100, 'Rollo 100 m', 2450.00]]],
         'Tomacorriente doble polarizado'   => ['cat' => 'Electricidad', 'marca' => 'Bticino', 'und' => 'UND', 'precio' => 48.00, 'mayoreo' => null, 'costo' => 29.00, 'stock' => 60, 'min' => 15],
@@ -132,6 +133,7 @@ class DemoFerreteriaSeeder extends Seeder
                     'factor_cantidad'  => $presentacion[1],
                     'factor_modo'      => $presentacion[4] ?? 'contiene',
                     'precio_venta'     => $presentacion[3],
+                    'margen'           => $presentacion[5] ?? null,
                 ]);
             }
 

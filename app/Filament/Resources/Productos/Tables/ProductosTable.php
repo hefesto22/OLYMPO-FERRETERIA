@@ -72,10 +72,12 @@ class ProductosTable
                     ->sortable()
                     ->alignEnd(),
                 TextColumn::make('costo_promedio')
-                    ->label('Costo prom.')
+                    ->label('Costo ponderado')
                     ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state, 4))
+                    ->tooltip('Promedio ponderado de todas las entradas, sin ISV')
+                    ->sortable()
                     ->alignEnd()
-                    ->toggleable(isToggledHiddenByDefault: true),
+                    ->toggleable(),
                 TextColumn::make('ubicacion')
                     ->label('Ubicación')
                     ->placeholder('—')

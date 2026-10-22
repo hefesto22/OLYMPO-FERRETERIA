@@ -12,7 +12,10 @@ use App\Enums\EquivalenciaPresentacion;
 use App\Enums\EstadoVenta;
 use App\Enums\ListaPrecio;
 use App\Enums\MetodoPago;
+use App\Enums\RolFerreteria;
+use App\Enums\TipoDescuento;
 use App\Enums\TipoDocumentoVenta;
+use App\Enums\TipoIsv;
 use App\Enums\TipoMargen;
 use App\Enums\TipoMovimientoInventario;
 use App\Models\Caja;
@@ -166,14 +169,15 @@ it('respeta el tope de descuento del cajero', function (): void {
     $producto = productoEnExistencia(10, ['precio_venta' => 115]);
 
     expect(fn () => app(VentaService::class)->registrar(
-        new DatosVenta([new LineaVenta($producto->id, 1, descuentoPct: 10)]),
+        new DatosVenta([new LineaVenta($producto->id, 1, descuento: 10)]),
         $cajero,
     ))->toThrow(DescuentoNoPermitidoException::class);
 
-    $venta = app(VentaService::class)->registrar(new DatosVenta([new LineaVenta($producto->id, 1, descuentoPct: 5)]), $cajero);
+    $venta = app(VentaService::class)->registrar(new DatosVenta([new LineaVenta($producto->id, 1, descuento: 5)]), $cajero);
 
-    expect((float) $venta->descuento)->toBe(5.75)
-        ->and((float) $venta->total)->toBe(109.25);
+    // 115 − 5 % = 109.25 → L 110 (sin monedas): el descuento efectivo es L 5.
+    expect((float) $venta->descuento)->toBe(5.0)
+        ->and((float) $venta->total)->toBe(110.0);
 });
 
 it('un usuario sin rol de caja no puede dar descuentos', function (): void {
@@ -181,9 +185,93 @@ it('un usuario sin rol de caja no puede dar descuentos', function (): void {
     $producto = productoEnExistencia(10, ['precio_venta' => 100]);
 
     expect(fn () => app(VentaService::class)->registrar(
-        new DatosVenta([new LineaVenta($producto->id, 1, descuentoPct: 1)]),
+        new DatosVenta([new LineaVenta($producto->id, 1, descuento: 1)]),
         $cajero,
     ))->toThrow(DescuentoNoPermitidoException::class);
+});
+
+it('acepta el descuento en lempiras y lo compara con el tope en porcentaje', function (): void {
+    [$cajero] = cajeroConTurnoAbierto();
+    Role::findOrCreate('cajero', 'web');
+    $cajero->assignRole('cajero');
+    ConfiguracionEmpresa::actual()->update(['descuento_max_cajero' => 5]);
+    $producto = productoEnExistencia(10, ['precio_venta' => 115]);
+
+    // L 10 de L 115 es 8.7 %: pasa el tope de 5 %.
+    expect(fn () => app(VentaService::class)->registrar(
+        new DatosVenta([new LineaVenta($producto->id, 1, descuento: 10, tipoDescuento: TipoDescuento::Monto)]),
+        $cajero,
+    ))->toThrow(DescuentoNoPermitidoException::class);
+
+    $venta = app(VentaService::class)->registrar(
+        new DatosVenta([new LineaVenta($producto->id, 1, descuento: 5, tipoDescuento: TipoDescuento::Monto)]),
+        $cajero,
+    );
+    $detalle = $venta->detalles()->sole();
+
+    expect((float) $venta->total)->toBe(110.0)
+        ->and((float) $venta->descuento)->toBe(5.0)
+        ->and($detalle->descuento_tipo)->toBe(TipoDescuento::Monto)
+        ->and((float) $detalle->descuento_valor)->toBe(5.0)
+        ->and((float) $detalle->descuento_pct)->toBe(4.35);
+});
+
+it('reparte el descuento a toda la venta entre las líneas y separa el ISV por tasa', function (): void {
+    [$cajero] = cajeroConTurnoAbierto();
+    Role::findOrCreate(RolFerreteria::Administrador->value, 'web');
+    $cajero->assignRole(RolFerreteria::Administrador->value);
+    $martillo = productoEnExistencia(10, ['precio_venta' => 115]);
+    $semilla = productoEnExistencia(10, ['precio_venta' => 100, 'tipo_isv' => TipoIsv::Exento]);
+
+    // 230 + 100 = 330; − 10 % = 297. Los L 33 se reparten 23 y 10.
+    $venta = app(VentaService::class)->registrar(
+        new DatosVenta(
+            [new LineaVenta($martillo->id, 2), new LineaVenta($semilla->id, 1)],
+            descuentoGlobal: 10,
+            tipoDescuentoGlobal: TipoDescuento::Porcentaje,
+        ),
+        $cajero,
+    );
+
+    expect((float) $venta->total)->toBe(297.0)
+        ->and((float) $venta->descuento)->toBe(33.0)
+        ->and((float) $venta->descuento_global)->toBe(33.0)
+        ->and($venta->descuento_global_tipo)->toBe(TipoDescuento::Porcentaje)
+        ->and((float) $venta->descuento_global_valor)->toBe(10.0)
+        ->and((float) $venta->importe_gravado_15)->toBe(180.0)
+        ->and((float) $venta->isv_15)->toBe(27.0)
+        ->and((float) $venta->importe_exento)->toBe(90.0);
+
+    $detalles = $venta->detalles()->orderBy('id')->get();
+
+    expect((float) $detalles[0]->descuento_global)->toBe(23.0)
+        ->and((float) $detalles[0]->total)->toBe(207.0)
+        ->and($detalles[0]->descuentoDeLinea())->toBe(0.0)
+        ->and((float) $detalles[1]->descuento_global)->toBe(10.0)
+        ->and((float) $detalles[1]->total)->toBe(90.0);
+});
+
+it('no deja juntar descuentos de línea y global por encima del tope', function (): void {
+    [$cajero] = cajeroConTurnoAbierto();
+    Role::findOrCreate('cajero', 'web');
+    $cajero->assignRole('cajero');
+    ConfiguracionEmpresa::actual()->update(['descuento_max_cajero' => 5]);
+    $producto = productoEnExistencia(10, ['precio_venta' => 100]);
+
+    // 5 % en la línea (L 95) y otro 5 % a toda la venta (L 91): son 9 %.
+    expect(fn () => app(VentaService::class)->registrar(
+        new DatosVenta([new LineaVenta($producto->id, 1, descuento: 5)], descuentoGlobal: 5),
+        $cajero,
+    ))->toThrow(DescuentoNoPermitidoException::class);
+
+    // Solo el 5 % a toda la venta sí cabe.
+    $venta = app(VentaService::class)->registrar(
+        new DatosVenta([new LineaVenta($producto->id, 1)], descuentoGlobal: 5),
+        $cajero,
+    );
+
+    expect((float) $venta->total)->toBe(95.0)
+        ->and((float) $venta->descuento_global)->toBe(5.0);
 });
 
 it('exige efectivo suficiente', function (): void {

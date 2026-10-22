@@ -50,3 +50,17 @@ it('explica el cálculo paso a paso', function (): void {
         ->and(round($paso['exacto'], 2))->toBe(28.11)
         ->and($paso['precio'])->toBe(29.0);
 });
+
+it('calcula la ganancia sobre el costo sin el ISV', function (): void {
+    // L 29 con ISV = L 25.22 sin ISV; sobre L 18.80 de costo = 34.1 %.
+    expect(round((float) CalculadoraPrecio::ganancia(29, 18.80, 0.15), 3))->toBe(0.341)
+        ->and(CalculadoraPrecio::ganancia(29, 0, 0.15))->toBeNull();
+});
+
+it('toma como meta el margen propio de la presentación o el del producto', function (): void {
+    expect(CalculadoraPrecio::margenObjetivo(TipoMargen::Porcentaje, 15, 30, 50, 940))->toBe(0.15)
+        ->and(CalculadoraPrecio::margenObjetivo(TipoMargen::Porcentaje, null, 30, 50, 940))->toBe(0.3)
+        ->and(CalculadoraPrecio::margenObjetivo(TipoMargen::Monto, null, 5, 50, 1000))->toBe(0.25)
+        ->and(CalculadoraPrecio::margenObjetivo(TipoMargen::Monto, 150, 5, 50, 1000))->toBe(0.15)
+        ->and(CalculadoraPrecio::margenObjetivo(TipoMargen::Manual, null, null, 1, 100))->toBeNull();
+});

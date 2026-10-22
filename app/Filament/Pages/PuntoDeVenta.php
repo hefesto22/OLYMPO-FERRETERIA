@@ -6,6 +6,7 @@ namespace App\Filament\Pages;
 
 use App\Domain\Exceptions\GrupoOlympoException;
 use App\Enums\ListaPrecio;
+use App\Enums\TipoDescuento;
 use App\Enums\TipoDocumentoVenta;
 use App\Enums\TipoIsv;
 use App\Enums\TipoMovimientoCaja;
@@ -13,6 +14,7 @@ use App\Filament\Schemas\Components\MontoField;
 use App\Filament\Schemas\Components\RTNField;
 use App\Filament\Schemas\Components\TelefonoHondurasField;
 use App\Models\Caja;
+use App\Models\Categoria;
 use App\Models\Cliente;
 use App\Models\Producto;
 use App\Models\ProductoPresentacion;
@@ -50,19 +52,47 @@ use Livewire\Attributes\Computed;
 /**
  * Punto de venta de mostrador.
  *
- * El carrito vive en el componente (Livewire); los precios y totales que
- * se muestran salen de las mismas clases que usa VentaService al
- * guardar, así lo que ve el cajero es lo que queda en el documento.
+ * Dos zonas: a la izquierda el catálogo (buscador, categoría y la lista de
+ * productos con su botón Agregar), a la derecha el carrito (productos,
+ * documento, cliente, total, pagos y Cobrar, siempre a la vista). El
+ * carrito vive en el componente (Livewire); los precios y totales salen de
+ * las mismas clases que usa VentaService al guardar, así lo que ve el
+ * cajero es lo que queda en el documento.
  *
- * Atajos: F2 buscar · F9 cobrar · Enter en el buscador agrega por código.
+ * Pagos por líneas: efectivo, tarjeta o transferencia, combinables. La
+ * primera línea sin monto toma lo que falta para el total.
+ *
+ * Descuentos en % o en lempiras, por línea y a toda la venta (el global se
+ * reparte entre las líneas). El tope del rol se avisa en pantalla y lo
+ * hace cumplir VentaService al cobrar.
+ *
+ * Teclado: F2 buscar, flechas para elegir en la lista, Enter agrega (o
+ * agrega por código de barras), Esc limpia la búsqueda, F9 cobra.
+ *
+ * En el teléfono o la tablet, el botón de cámara del buscador lee códigos
+ * de barras uno tras otro (escanear()) y el catálogo y el carrito se
+ * muestran por turnos.
  *
  * @property Schema $form
- * @property-read list<array{clave: string, producto: Producto, presentacion: ProductoPresentacion|null, opciones: array<int, string>, unidad_base: string, cantidad: float, descuento_pct: float, precio: float, existencia: float|null, tipo_isv: TipoIsv, bruto: float, descuento: float, total: float, base: float, isv: float}> $carrito
+ * @property-read list<array{clave: string, producto: Producto, presentacion: ProductoPresentacion|null, opciones: array<int, string>, unidad_base: string, cantidad: float, cantidad_base: float, descuento_tipo: TipoDescuento, descuento_pct: float, excede_descuento: bool, precio: float, existencia: float|null, excede: bool, tipo_isv: TipoIsv, bruto: float, total_linea: float, descuento_linea: float, descuento_global: float, descuento: float, total: float, base: float, isv: float}> $carrito
  * @property-read array{descuento: float, importe_exento: float, importe_gravado_15: float, importe_gravado_18: float, isv_15: float, isv_18: float, subtotal: float, total: float} $totales
  */
 class PuntoDeVenta extends Page
 {
     use HasPageShield;
+
+    /** Formas de pago de cada línea de pago. */
+    public const METODOS = [
+        'efectivo'      => 'Efectivo',
+        'tarjeta'       => 'Tarjeta',
+        'transferencia' => 'Transferencia',
+    ];
+
+    /** Billetes para sugerir el efectivo recibido. */
+    private const BILLETES = [50, 100, 500, 1000];
+
+    /** Productos que se muestran en el catálogo por tanda. */
+    private const POR_PAGINA = 40;
 
     protected string $view = 'filament.pages.punto-de-venta';
 
@@ -82,10 +112,11 @@ class PuntoDeVenta extends Page
 
     public string $busqueda = '';
 
-    /** @var list<array{producto_id: int, etiqueta: string, detalle: string, precio: float}> */
-    public array $resultados = [];
+    public ?int $categoriaId = null;
 
-    /** @var array<string, array{producto_id: int, presentacion_id: int|string|null, cantidad: float|int|string, descuento: float|int|string}> */
+    public int $limite = self::POR_PAGINA;
+
+    /** @var array<string, array{producto_id: int, presentacion_id: int|string|null, cantidad: float|int|string, descuento: float|int|string|null, descuento_tipo?: string}> */
     public array $lineas = [];
 
     /**
@@ -95,12 +126,29 @@ class PuntoDeVenta extends Page
      */
     private ?array $resumen = null;
 
-    /** @var array<string, mixed>|null */
+    /**
+     * Estado del carrito: lo del formulario (documento, cliente, precio) y
+     * las líneas de pago (`pagos`: método, monto y referencia).
+     *
+     * @var array<string, mixed>|null
+     */
     public ?array $venta = [];
+
+    /** El bloque del descuento a toda la venta se muestra al pedirlo. */
+    public bool $descuentoGlobalAbierto = false;
 
     public static function getNavigationGroup(): ?string
     {
         return 'Ventas';
+    }
+
+    /**
+     * Sin encabezado de página: el turno y sus acciones van en la franja
+     * superior del mostrador, para dejarle la pantalla al carrito.
+     */
+    public function getHeading(): string
+    {
+        return '';
     }
 
     public function mount(): void
@@ -109,23 +157,32 @@ class PuntoDeVenta extends Page
         $this->reiniciarVenta();
     }
 
-    // ─── Formulario lateral: documento, cliente, precio y pago ───────────
+    // ─── Caja: documento, precio y cliente ───────────────────────────────
 
     public function form(Schema $schema): Schema
     {
-        $simbolo = (string) config('honduras.moneda.simbolo', 'L.');
-
         return $schema
             ->statePath('venta')
             ->components([
-                ToggleButtons::make('tipo_documento')
-                    ->label('Documento')
-                    ->options(['recibo' => 'Recibo', 'factura' => 'Factura'])
-                    ->icons(['recibo' => Heroicon::OutlinedDocumentText, 'factura' => Heroicon::OutlinedDocumentCheck])
-                    ->colors(['recibo' => 'gray', 'factura' => 'primary'])
-                    ->inline()
-                    ->required()
-                    ->live(),
+                // En el teléfono, uno debajo del otro: lado a lado no caben.
+                Grid::make(['default' => 1, 'sm' => 2])
+                    ->schema([
+                        ToggleButtons::make('tipo_documento')
+                            ->label('Documento')
+                            ->options(['recibo' => 'Recibo', 'factura' => 'Factura'])
+                            ->icons(['recibo' => Heroicon::OutlinedDocumentText, 'factura' => Heroicon::OutlinedDocumentCheck])
+                            ->colors(['recibo' => 'gray', 'factura' => 'primary'])
+                            ->grouped()
+                            ->required()
+                            ->live(),
+                        ToggleButtons::make('lista_precio')
+                            ->label('Precio')
+                            ->options(['publico' => 'Público', 'mayoreo' => 'Mayoreo'])
+                            ->colors(['publico' => 'gray', 'mayoreo' => 'warning'])
+                            ->grouped()
+                            ->required()
+                            ->live(),
+                    ]),
                 Select::make('cliente_id')
                     ->label('Cliente')
                     ->placeholder('Consumidor final')
@@ -155,64 +212,69 @@ class PuntoDeVenta extends Page
                         $set('cliente_nombre', $cliente?->nombre);
                         $set('cliente_rtn', $cliente?->rtn);
                     }),
-                ToggleButtons::make('lista_precio')
-                    ->label('Precio')
-                    ->options(['publico' => 'Público', 'mayoreo' => 'Mayoreo'])
-                    ->colors(['publico' => 'gray', 'mayoreo' => 'warning'])
-                    ->inline()
-                    ->required()
-                    ->live(),
-                TextInput::make('cliente_nombre')
-                    ->label('Nombre en la factura')
-                    ->placeholder('Consumidor final')
-                    ->maxLength(150)
-                    ->visible(fn (Get $get): bool => $get('tipo_documento') === 'factura'),
-                RTNField::make('cliente_rtn')
-                    ->visible(fn (Get $get): bool => $get('tipo_documento') === 'factura'),
                 Grid::make(2)
+                    ->visible(fn (Get $get): bool => $get('tipo_documento') === 'factura')
                     ->schema([
-                        TextInput::make('efectivo_recibido')
-                            ->label('Efectivo recibido')
-                            ->numeric()
-                            ->minValue(0)
-                            ->prefix($simbolo)
-                            ->placeholder('Exacto')
-                            ->live(onBlur: true)
-                            ->columnSpanFull(),
-                        TextInput::make('monto_tarjeta')
-                            ->label('Tarjeta')
-                            ->numeric()
-                            ->minValue(0)
-                            ->prefix($simbolo)
-                            ->live(onBlur: true),
-                        TextInput::make('referencia_tarjeta')
-                            ->label('Voucher')
-                            ->maxLength(60),
-                        TextInput::make('monto_transferencia')
-                            ->label('Transferencia')
-                            ->numeric()
-                            ->minValue(0)
-                            ->prefix($simbolo)
-                            ->live(onBlur: true),
-                        TextInput::make('referencia_transferencia')
-                            ->label('N.º de transferencia')
-                            ->maxLength(60),
+                        TextInput::make('cliente_nombre')
+                            ->label('Nombre en la factura')
+                            ->placeholder('Consumidor final')
+                            ->maxLength(150),
+                        RTNField::make('cliente_rtn'),
                     ]),
             ]);
     }
 
-    // ─── Buscador y carrito ───────────────────────────────────────────────
+    // ─── Catálogo ─────────────────────────────────────────────────────────
 
     public function updatedBusqueda(): void
     {
-        $termino = trim($this->busqueda);
+        $this->limite = self::POR_PAGINA;
+    }
 
-        $this->resultados = mb_strlen($termino) >= 2 ? $this->buscarProductos($termino) : [];
+    public function updatedCategoriaId(): void
+    {
+        $this->limite = self::POR_PAGINA;
+        $this->dispatch('enfocar-busqueda');
+    }
+
+    public function mostrarMas(): void
+    {
+        $this->limite += self::POR_PAGINA;
+    }
+
+    /**
+     * Productos del catálogo según la búsqueda y la categoría.
+     *
+     * @return array{productos: list<array{producto_id: int, nombre: string, codigo: string|null, marca: string|null, unidad: string, existencia: string|null, estado: string, precio: float, presentaciones: list<array{id: int, etiqueta: string, precio: float}>}>, hay_mas: bool}
+     */
+    #[Computed]
+    public function catalogo(): array
+    {
+        return $this->consultarCatalogo(trim($this->busqueda), $this->limite);
+    }
+
+    /**
+     * Categorías que tienen productos activos, para el filtro.
+     *
+     * @return array<int, string>
+     */
+    #[Computed]
+    public function categorias(): array
+    {
+        return Categoria::query()
+            ->where('activo', true)
+            ->whereIn('id', Producto::query()->where('activo', true)->select('categoria_id'))
+            ->orderBy('nombre')
+            ->get()
+            ->mapWithKeys(fn (Categoria $categoria): array => [$categoria->id => $categoria->nombre])
+            ->all();
     }
 
     /**
      * Enter en el buscador: código de barras de una presentación, código de
-     * barras o código interno del producto, o el único resultado por nombre.
+     * barras o código interno del producto, o el único producto que
+     * coincide por nombre. Lo que se agrega así limpia la búsqueda (el
+     * escáner manda el código y Enter).
      */
     public function agregarPorCodigo(): void
     {
@@ -222,66 +284,75 @@ class PuntoDeVenta extends Page
             return;
         }
 
-        $presentacion = ProductoPresentacion::query()
-            ->where('codigo_barras', $termino)
-            ->where('activo', true)
-            ->whereHas('producto', fn (Builder $query): Builder => $query->where('activo', true))
-            ->first();
+        $encontrado = $this->buscarPorCodigo($termino);
 
-        if ($presentacion !== null) {
-            $this->agregar($presentacion->producto_id, $presentacion->id);
+        if ($encontrado !== null) {
+            $this->agregar($encontrado['producto']->id, $encontrado['presentacion']?->id, limpiar: true);
 
             return;
         }
 
-        $producto = Producto::query()
-            ->where('activo', true)
-            ->where(fn (Builder $query): Builder => $query
-                ->where('codigo_barras', $termino)
-                ->orWhereRaw('LOWER(codigo) = ?', [mb_strtolower($termino)]))
-            ->first();
+        $encontrados = $this->consultarCatalogo($termino, 2)['productos'];
 
-        if ($producto !== null) {
-            $this->agregar($producto->id);
+        if (count($encontrados) === 1) {
+            $this->agregar($encontrados[0]['producto_id'], limpiar: true);
 
             return;
         }
 
-        $this->resultados = $this->buscarProductos($termino);
-
-        if (count($this->resultados) === 1) {
-            $this->agregar($this->resultados[0]['producto_id']);
-
-            return;
-        }
-
-        if ($this->resultados === []) {
+        if ($encontrados === []) {
             Notification::make()
                 ->warning()
                 ->title("No se encontró \"{$termino}\"")
+                ->body('Revisa el código o busca por nombre.')
                 ->send();
         }
     }
 
-    public function agregar(int $productoId, ?int $presentacionId = null): void
+    /**
+     * Código leído con la cámara del teléfono o la tablet. Solo agrega por
+     * código exacto (sin buscar por nombre) y responde qué pasó, para
+     * mostrarlo sobre la cámara sin cerrarla: así se leen varios productos
+     * seguidos.
+     *
+     * @return array{ok: bool, texto: string}
+     */
+    public function escanear(string $codigo): array
     {
-        foreach ($this->lineas as $clave => $linea) {
-            if ((int) $linea['producto_id'] === $productoId && self::idOpcional($linea['presentacion_id']) === $presentacionId) {
-                $this->lineas[$clave]['cantidad'] = self::numero($linea['cantidad']) + 1;
-                $this->limpiarBusqueda();
+        $codigo = trim($codigo);
+        $encontrado = $codigo !== '' ? $this->buscarPorCodigo($codigo) : null;
 
-                return;
-            }
+        if ($encontrado === null) {
+            return ['ok' => false, 'texto' => "Ningún producto tiene el código {$codigo}."];
         }
 
-        $this->lineas['l'.Str::lower(Str::random(10))] = [
-            'producto_id'     => $productoId,
-            'presentacion_id' => $presentacionId,
-            'cantidad'        => 1,
-            'descuento'       => 0,
-        ];
+        $producto = $encontrado['producto'];
+        $presentacion = $encontrado['presentacion'];
+        $clave = $this->sumarAlCarrito($producto->id, $presentacion?->id);
+        $nombre = $presentacion !== null ? $producto->nombre.', '.$presentacion->etiqueta() : $producto->nombre;
 
-        $this->limpiarBusqueda();
+        return [
+            'ok'    => true,
+            'texto' => $nombre.': '.cantidadFormato(self::numero($this->lineas[$clave]['cantidad'])).' en el carrito',
+        ];
+    }
+
+    // ─── Carrito ──────────────────────────────────────────────────────────
+
+    /**
+     * Desde la lista se agrega sin borrar la búsqueda (para agregar varios
+     * del mismo filtro); con Enter o el escáner, la búsqueda se limpia.
+     */
+    public function agregar(int $productoId, ?int $presentacionId = null, bool $limpiar = false): void
+    {
+        $this->sumarAlCarrito($productoId, $presentacionId);
+
+        if ($limpiar) {
+            $this->busqueda = '';
+            $this->limite = self::POR_PAGINA;
+        }
+
+        $this->dispatch('enfocar-busqueda');
     }
 
     public function sumar(string $clave, int $cuanto): void
@@ -304,6 +375,7 @@ class PuntoDeVenta extends Page
     public function quitar(string $clave): void
     {
         unset($this->lineas[$clave]);
+        $this->dispatch('enfocar-busqueda');
     }
 
     public function vaciar(): void
@@ -314,10 +386,21 @@ class PuntoDeVenta extends Page
     /**
      * Líneas del carrito con precio, existencia e importes calculados.
      *
-     * @return list<array{clave: string, producto: Producto, presentacion: ProductoPresentacion|null, opciones: array<int, string>, unidad_base: string, cantidad: float, descuento_pct: float, precio: float, existencia: float|null, tipo_isv: TipoIsv, bruto: float, descuento: float, total: float, base: float, isv: float}>
+     * @return list<array{clave: string, producto: Producto, presentacion: ProductoPresentacion|null, opciones: array<int, string>, unidad_base: string, cantidad: float, cantidad_base: float, descuento_tipo: TipoDescuento, descuento_pct: float, excede_descuento: bool, precio: float, existencia: float|null, excede: bool, tipo_isv: TipoIsv, bruto: float, total_linea: float, descuento_linea: float, descuento_global: float, descuento: float, total: float, base: float, isv: float}>
      */
     #[Computed]
     public function carrito(): array
+    {
+        return $this->calcularCarrito();
+    }
+
+    /**
+     * Lo mismo que `carrito`, sin la caché del request: lo usa cobrar(),
+     * que después vacía el carrito.
+     *
+     * @return list<array{clave: string, producto: Producto, presentacion: ProductoPresentacion|null, opciones: array<int, string>, unidad_base: string, cantidad: float, cantidad_base: float, descuento_tipo: TipoDescuento, descuento_pct: float, excede_descuento: bool, precio: float, existencia: float|null, excede: bool, tipo_isv: TipoIsv, bruto: float, total_linea: float, descuento_linea: float, descuento_global: float, descuento: float, total: float, base: float, isv: float}>
+     */
+    private function calcularCarrito(): array
     {
         if ($this->lineas === []) {
             return [];
@@ -335,7 +418,8 @@ class PuntoDeVenta extends Page
             ->keyBy('id');
 
         $lista = $this->listaPrecio();
-        $carrito = [];
+        $maximo = $this->descuentoMaximo();
+        $previas = [];
 
         foreach ($this->lineas as $clave => $linea) {
             $producto = $productos->get((int) $linea['producto_id']);
@@ -350,9 +434,13 @@ class PuntoDeVenta extends Page
             $presentacion?->setRelation('producto', $producto);
 
             $cantidad = max(0.0, self::numero($linea['cantidad']));
-            $descuentoPct = max(0.0, min(self::numero($linea['descuento']), 100.0));
+            $cantidadBase = $cantidad * ($presentacion !== null ? (float) $presentacion->factor : 1.0);
+            $existencia = $producto->controla_stock ? (float) $producto->stock : null;
+            $tipoDescuento = TipoDescuento::desdeEstado($linea['descuento_tipo'] ?? null);
+            $descuento = max(0.0, self::numero($linea['descuento']));
             $precio = PrecioProducto::unitario($producto, $presentacion, $lista);
-            $calculo = CalculadoraVenta::linea($precio, $cantidad, $descuentoPct, $producto->tipo_isv->tasa());
+            $calculo = CalculadoraVenta::linea($precio, $cantidad, $descuento, $producto->tipo_isv->tasa(), $tipoDescuento);
+            $porcentaje = CalculadoraVenta::porcentaje($calculo['bruto'], $descuento, $tipoDescuento);
 
             $opciones = [];
 
@@ -363,22 +451,62 @@ class PuntoDeVenta extends Page
                 }
             }
 
+            $previas[] = [
+                'clave'            => (string) $clave,
+                'producto'         => $producto,
+                'presentacion'     => $presentacion,
+                'opciones'         => $opciones,
+                'unidad_base'      => $producto->unidadMedida->nombre,
+                'cantidad'         => $cantidad,
+                'cantidad_base'    => $cantidadBase,
+                'descuento_tipo'   => $tipoDescuento,
+                'descuento_pct'    => $porcentaje,
+                'excede_descuento' => $porcentaje - $maximo > 0.001,
+                'precio'           => $precio,
+                'existencia'       => $existencia,
+                'excede'           => $existencia !== null && $cantidadBase - $existencia > 0.000001,
+                'tipo_isv'         => $producto->tipo_isv,
+                'bruto'            => $calculo['bruto'],
+                'total_linea'      => $calculo['total'],
+                'descuento_linea'  => $calculo['descuento'],
+            ];
+        }
+
+        // El descuento a toda la venta se reparte entre las líneas.
+        $partes = CalculadoraVenta::repartirGlobal(
+            array_column($previas, 'total_linea'),
+            max(0.0, self::numero($this->venta['descuento_global'] ?? null)),
+            TipoDescuento::desdeEstado($this->venta['descuento_global_tipo'] ?? null),
+        );
+        $carrito = [];
+
+        foreach ($previas as $indice => $previa) {
+            $parte = $partes[$indice] ?? 0.0;
+            $calculo = CalculadoraVenta::conParteGlobal($previa['bruto'], $previa['total_linea'], $parte, $previa['tipo_isv']->tasa());
+
             $carrito[] = [
-                'clave'         => (string) $clave,
-                'producto'      => $producto,
-                'presentacion'  => $presentacion,
-                'opciones'      => $opciones,
-                'unidad_base'   => $producto->unidadMedida->nombre,
-                'cantidad'      => $cantidad,
-                'descuento_pct' => $descuentoPct,
-                'precio'        => $precio,
-                'existencia'    => $producto->controla_stock ? (float) $producto->stock : null,
-                'tipo_isv'      => $producto->tipo_isv,
-                'bruto'         => $calculo['bruto'],
-                'descuento'     => $calculo['descuento'],
-                'total'         => $calculo['total'],
-                'base'          => $calculo['base'],
-                'isv'           => $calculo['isv'],
+                'clave'            => $previa['clave'],
+                'producto'         => $previa['producto'],
+                'presentacion'     => $previa['presentacion'],
+                'opciones'         => $previa['opciones'],
+                'unidad_base'      => $previa['unidad_base'],
+                'cantidad'         => $previa['cantidad'],
+                'cantidad_base'    => $previa['cantidad_base'],
+                'descuento_tipo'   => $previa['descuento_tipo'],
+                'descuento_pct'    => $previa['descuento_pct'],
+                'excede_descuento' => $previa['excede_descuento'],
+                'precio'           => $previa['precio'],
+                'existencia'       => $previa['existencia'],
+                'excede'           => $previa['excede'],
+                'tipo_isv'         => $previa['tipo_isv'],
+                'bruto'            => $calculo['bruto'],
+                'total_linea'      => $previa['total_linea'],
+                'descuento_linea'  => $previa['descuento_linea'],
+                'descuento_global' => $parte,
+                'descuento'        => $calculo['descuento'],
+                'total'            => $calculo['total'],
+                'base'             => $calculo['base'],
+                'isv'              => $calculo['isv'],
             ];
         }
 
@@ -394,29 +522,211 @@ class PuntoDeVenta extends Page
         return CalculadoraVenta::totales($this->carrito);
     }
 
-    /**
-     * Efectivo que falta cubrir, recibido y cambio (para el panel de cobro).
-     *
-     * @return array{efectivo_a_cobrar: float, recibido: float|null, cambio: float|null}
-     */
-    public function cobro(): array
+    // ─── Pagos ────────────────────────────────────────────────────────────
+
+    public function agregarPago(): void
     {
-        $total = $this->totales['total'];
-        $tarjeta = self::numero($this->venta['monto_tarjeta'] ?? null);
-        $transferencia = self::numero($this->venta['monto_transferencia'] ?? null);
-        $efectivo = max(0.0, round($total - $tarjeta - $transferencia, 2));
-        $recibido = self::montoOpcional($this->venta['efectivo_recibido'] ?? null);
+        $usados = array_column($this->lineasDePago(), 'metodo');
+        $metodo = 'efectivo';
+
+        foreach (array_keys(self::METODOS) as $opcion) {
+            if (! in_array($opcion, $usados, true)) {
+                $metodo = $opcion;
+
+                break;
+            }
+        }
+
+        $pagos = $this->lineasDePago();
+        $pagos[] = ['metodo' => $metodo, 'monto' => null, 'referencia' => null];
+        $this->venta['pagos'] = $pagos;
+    }
+
+    public function quitarPago(int $indice): void
+    {
+        $pagos = $this->lineasDePago();
+        unset($pagos[$indice]);
+
+        $this->venta['pagos'] = $pagos !== [] ? array_values($pagos) : [self::pagoInicial()];
+    }
+
+    /**
+     * Botón de billete: lo pone como monto de la (primera) línea de efectivo.
+     */
+    public function fijarBillete(float $monto): void
+    {
+        $pagos = $this->lineasDePago();
+
+        foreach ($pagos as $indice => $pago) {
+            if ($pago['metodo'] === 'efectivo') {
+                $pagos[$indice]['monto'] = $monto;
+                $this->venta['pagos'] = $pagos;
+
+                return;
+            }
+        }
+
+        $pagos[] = ['metodo' => 'efectivo', 'monto' => $monto, 'referencia' => null];
+        $this->venta['pagos'] = $pagos;
+    }
+
+    /**
+     * Pagos con el monto que cuenta: el tecleado o, en la primera línea sin
+     * monto, lo que falta para el total.
+     *
+     * @return list<array{metodo: string, monto: float, tecleado: bool, referencia: string|null}>
+     */
+    public function pagosResueltos(?float $total = null): array
+    {
+        $total ??= $this->totales['total'];
+        $lineas = $this->lineasDePago();
+        $tecleado = 0.0;
+
+        foreach ($lineas as $linea) {
+            $tecleado += $linea['monto'] ?? 0.0;
+        }
+
+        $resto = max(0.0, round($total - $tecleado, 2));
+        $restoUsado = false;
+        $resueltos = [];
+
+        foreach ($lineas as $linea) {
+            if ($linea['monto'] !== null) {
+                $monto = $linea['monto'];
+            } elseif (! $restoUsado) {
+                $monto = $resto;
+                $restoUsado = true;
+            } else {
+                $monto = 0.0;
+            }
+
+            $resueltos[] = [
+                'metodo'     => $linea['metodo'],
+                'monto'      => round($monto, 2),
+                'tecleado'   => $linea['monto'] !== null,
+                'referencia' => $linea['referencia'],
+            ];
+        }
+
+        return $resueltos;
+    }
+
+    /**
+     * Pagado, lo que falta, el cambio y el efectivo que hay que cobrar.
+     *
+     * @return array{pagado: float, restante: float, cambio: float, efectivo_a_cobrar: float, hay_efectivo: bool}
+     */
+    public function cobro(?float $total = null): array
+    {
+        $total ??= $this->totales['total'];
+
+        /** @var array<string, float> $porMetodo */
+        $porMetodo = ['efectivo' => 0.0, 'tarjeta' => 0.0, 'transferencia' => 0.0];
+        $hayEfectivo = false;
+
+        foreach ($this->pagosResueltos($total) as $pago) {
+            $porMetodo[$pago['metodo']] = ($porMetodo[$pago['metodo']] ?? 0.0) + $pago['monto'];
+            $hayEfectivo = $hayEfectivo || $pago['metodo'] === 'efectivo';
+        }
+
+        $efectivoACobrar = max(0.0, round($total - $porMetodo['tarjeta'] - $porMetodo['transferencia'], 2));
+        $pagado = round($porMetodo['efectivo'] + $porMetodo['tarjeta'] + $porMetodo['transferencia'], 2);
 
         return [
-            'efectivo_a_cobrar' => $efectivo,
-            'recibido'          => $recibido,
-            'cambio'            => $recibido !== null ? round($recibido - $efectivo, 2) : null,
+            'pagado'            => $pagado,
+            'restante'          => max(0.0, round($total - $pagado, 2)),
+            'cambio'            => max(0.0, round($porMetodo['efectivo'] - $efectivoACobrar, 2)),
+            'efectivo_a_cobrar' => $efectivoACobrar,
+            'hay_efectivo'      => $hayEfectivo,
         ];
+    }
+
+    /**
+     * Billetes con que suele pagar el cliente: lo que se cobra en efectivo
+     * redondeado hacia arriba a 50, 100, 500 y 1000 (sin repetir).
+     *
+     * @return list<float>
+     */
+    public function sugerenciasEfectivo(): array
+    {
+        $cobro = $this->cobro();
+        $efectivo = $cobro['efectivo_a_cobrar'];
+
+        if ($efectivo <= 0 || ! $cobro['hay_efectivo']) {
+            return [];
+        }
+
+        $sugerencias = [];
+
+        foreach (self::BILLETES as $billete) {
+            $monto = (float) (ceil($efectivo / $billete) * $billete);
+
+            if ($monto > $efectivo && ! in_array($monto, $sugerencias, true)) {
+                $sugerencias[] = $monto;
+            }
+        }
+
+        return $sugerencias;
     }
 
     public function descuentoMaximo(): float
     {
         return DescuentoPermitido::para($this->usuario());
+    }
+
+    /**
+     * Descuento de la línea en % o en lempiras (por toda la línea).
+     */
+    public function tipoDescuento(string $clave, string $tipo): void
+    {
+        if (isset($this->lineas[$clave])) {
+            $this->lineas[$clave]['descuento_tipo'] = TipoDescuento::desdeEstado($tipo)->value;
+        }
+    }
+
+    public function tipoDescuentoGlobal(string $tipo): void
+    {
+        $this->venta['descuento_global_tipo'] = TipoDescuento::desdeEstado($tipo)->value;
+    }
+
+    public function abrirDescuentoGlobal(): void
+    {
+        $this->descuentoGlobalAbierto = true;
+        $this->dispatch('enfocar-descuento-global');
+    }
+
+    public function quitarDescuentoGlobal(): void
+    {
+        $this->descuentoGlobalAbierto = false;
+        $this->venta['descuento_global'] = null;
+    }
+
+    /**
+     * El descuento a toda la venta: cómo se teclea, cuánto rebaja y si,
+     * junto con los de las líneas, pasa el tope del cajero.
+     *
+     * @return array{tipo: TipoDescuento, global: float, porcentaje: float, excede: bool}
+     */
+    public function resumenDescuentos(): array
+    {
+        $bruto = 0.0;
+        $rebajado = 0.0;
+        $global = 0.0;
+
+        foreach ($this->carrito as $linea) {
+            $bruto += $linea['bruto'];
+            $rebajado += $linea['descuento'];
+            $global += $linea['descuento_global'];
+        }
+
+        $porcentaje = $bruto > 0 ? $rebajado / $bruto * 100 : 0.0;
+
+        return [
+            'tipo'       => TipoDescuento::desdeEstado($this->venta['descuento_global_tipo'] ?? null),
+            'global'     => round($global, 2),
+            'porcentaje' => round($porcentaje, 2),
+            'excede'     => $porcentaje - $this->descuentoMaximo() > 0.001,
+        ];
     }
 
     public function turno(): ?TurnoCaja
@@ -462,30 +772,22 @@ class PuntoDeVenta extends Page
         Notification::make()
             ->success()
             ->title(($venta->esFactura() ? 'Factura ' : 'Recibo ').$venta->numero)
-            ->body('Total '.lempiras((float) $venta->total).($cambio > 0 ? ' · Cambio '.lempiras($cambio) : ''))
+            ->body('Total '.lempiras((float) $venta->total).($cambio > 0 ? '. Cambio: '.lempiras($cambio) : ''))
             ->send();
 
         $this->dispatch('imprimir-ticket', url: route('filament.admin.tickets.venta', ['venta' => $venta]));
         $this->reiniciarVenta();
     }
 
-    // ─── Acciones del turno ──────────────────────────────────────────────
+    // ─── Acciones del turno (se muestran en la franja del mostrador) ──────
 
-    protected function getHeaderActions(): array
-    {
-        return [
-            $this->accionAbrirTurno(),
-            $this->accionMovimientoCaja(),
-            $this->accionCerrarTurno(),
-        ];
-    }
-
-    private function accionAbrirTurno(): Action
+    public function abrirTurnoAction(): Action
     {
         return Action::make('abrirTurno')
             ->label('Abrir turno')
             ->icon(Heroicon::OutlinedLockOpen)
-            ->color('success')
+            ->color('primary')
+            ->size('lg')
             ->visible(fn (): bool => $this->turnoId === null)
             ->modalWidth(Width::Medium)
             ->schema([
@@ -516,16 +818,19 @@ class PuntoDeVenta extends Page
                 $this->turnoId = $turno->id;
 
                 Notification::make()->success()->title('Turno abierto. ¡Buenas ventas!')->send();
+                $this->dispatch('enfocar-busqueda');
             });
     }
 
-    private function accionMovimientoCaja(): Action
+    public function movimientoCajaAction(): Action
     {
         return Action::make('movimientoCaja')
-            ->label('Entrada / retiro de efectivo')
+            ->label('Entrada o retiro')
             ->icon(Heroicon::OutlinedArrowsUpDown)
             ->color('gray')
+            ->size('sm')
             ->visible(fn (): bool => $this->turnoId !== null)
+            ->modalHeading('Entrada o retiro de efectivo')
             ->modalWidth(Width::Medium)
             ->schema([
                 ToggleButtons::make('tipo')
@@ -561,12 +866,14 @@ class PuntoDeVenta extends Page
             });
     }
 
-    private function accionCerrarTurno(): Action
+    public function cerrarTurnoAction(): Action
     {
         return Action::make('cerrarTurno')
             ->label('Cerrar turno')
             ->icon(Heroicon::OutlinedLockClosed)
             ->color('danger')
+            ->outlined()
+            ->size('sm')
             ->visible(fn (): bool => $this->turnoId !== null)
             ->modalWidth(Width::Large)
             ->modalHeading('Cerrar turno y hacer arqueo')
@@ -577,7 +884,7 @@ class PuntoDeVenta extends Page
                     ->schema([
                         TextEntry::make('r_ventas')
                             ->label('Ventas')
-                            ->state(fn (): string => $this->resumenTurno()['cantidad_ventas'].' · '.lempiras($this->resumenTurno()['total_ventas'])),
+                            ->state(fn (): string => $this->resumenTurno()['cantidad_ventas'].' ventas, '.lempiras($this->resumenTurno()['total_ventas'])),
                         TextEntry::make('r_fondo')
                             ->label('Fondo inicial')
                             ->state(fn (): string => lempiras((float) $this->turno()?->fondo_inicial)),
@@ -671,11 +978,69 @@ class PuntoDeVenta extends Page
 
     // ─── Apoyo ───────────────────────────────────────────────────────────
 
+    /**
+     * Suma uno a la línea de ese producto y presentación, o la crea, y
+     * devuelve la clave de la línea.
+     */
+    private function sumarAlCarrito(int $productoId, ?int $presentacionId): string
+    {
+        foreach ($this->lineas as $clave => $linea) {
+            if ((int) $linea['producto_id'] === $productoId && self::idOpcional($linea['presentacion_id']) === $presentacionId) {
+                $this->lineas[$clave]['cantidad'] = self::numero($linea['cantidad']) + 1;
+
+                return (string) $clave;
+            }
+        }
+
+        $clave = 'l'.Str::lower(Str::random(10));
+
+        $this->lineas[$clave] = [
+            'producto_id'     => $productoId,
+            'presentacion_id' => $presentacionId,
+            'cantidad'        => 1,
+            'descuento'       => null,
+            'descuento_tipo'  => TipoDescuento::Porcentaje->value,
+        ];
+
+        return $clave;
+    }
+
+    /**
+     * Producto (y presentación) con ese código exacto: el código de barras
+     * de una presentación, o el código de barras o el código interno del
+     * producto.
+     *
+     * @return array{producto: Producto, presentacion: ProductoPresentacion|null}|null
+     */
+    private function buscarPorCodigo(string $codigo): ?array
+    {
+        $presentacion = ProductoPresentacion::query()
+            ->with(['producto.unidadMedida', 'unidadMedida'])
+            ->where('codigo_barras', $codigo)
+            ->where('activo', true)
+            ->whereHas('producto', fn (Builder $query): Builder => $query->where('activo', true))
+            ->first();
+
+        if ($presentacion !== null) {
+            return ['producto' => $presentacion->producto, 'presentacion' => $presentacion];
+        }
+
+        $producto = Producto::query()
+            ->where('activo', true)
+            ->where(fn (Builder $query): Builder => $query
+                ->where('codigo_barras', $codigo)
+                ->orWhereRaw('LOWER(codigo) = ?', [mb_strtolower($codigo)]))
+            ->first();
+
+        return $producto !== null ? ['producto' => $producto, 'presentacion' => null] : null;
+    }
+
     private function reiniciarVenta(): void
     {
         $this->lineas = [];
         $this->busqueda = '';
-        $this->resultados = [];
+        $this->limite = self::POR_PAGINA;
+        $this->descuentoGlobalAbierto = false;
 
         $this->form->fill([
             'tipo_documento' => TipoDocumentoVenta::Recibo->value,
@@ -683,14 +1048,51 @@ class PuntoDeVenta extends Page
             'cliente_id'     => null,
         ]);
 
+        // Pagos y descuento global no son parte del formulario de Filament: se arman en la vista.
+        $this->venta = [
+            ...($this->venta ?? []),
+            'pagos'                 => [self::pagoInicial()],
+            'descuento_global'      => null,
+            'descuento_global_tipo' => TipoDescuento::Porcentaje->value,
+        ];
+
         $this->dispatch('enfocar-busqueda');
     }
 
-    private function limpiarBusqueda(): void
+    /**
+     * @return array{metodo: string, monto: null, referencia: null}
+     */
+    private static function pagoInicial(): array
     {
-        $this->busqueda = '';
-        $this->resultados = [];
-        $this->dispatch('enfocar-busqueda');
+        return ['metodo' => 'efectivo', 'monto' => null, 'referencia' => null];
+    }
+
+    /**
+     * Líneas de pago normalizadas tal como vienen del estado de Livewire.
+     *
+     * @return list<array{metodo: string, monto: float|null, referencia: string|null}>
+     */
+    private function lineasDePago(): array
+    {
+        $pagos = $this->venta['pagos'] ?? null;
+        $lineas = [];
+
+        foreach (is_array($pagos) ? $pagos : [] as $pago) {
+            if (! is_array($pago)) {
+                continue;
+            }
+
+            $metodo = $pago['metodo'] ?? null;
+            $monto = self::montoOpcional($pago['monto'] ?? null);
+
+            $lineas[] = [
+                'metodo'     => is_string($metodo) && array_key_exists($metodo, self::METODOS) ? $metodo : 'efectivo',
+                'monto'      => $monto !== null ? max(0.0, $monto) : null,
+                'referencia' => self::texto($pago['referencia'] ?? null),
+            ];
+        }
+
+        return $lineas !== [] ? $lineas : [self::pagoInicial()];
     }
 
     private function listaPrecio(): ListaPrecio
@@ -699,40 +1101,78 @@ class PuntoDeVenta extends Page
     }
 
     /**
-     * @return list<array{producto_id: int, etiqueta: string, detalle: string, precio: float}>
+     * Productos activos que coinciden con el término y la categoría, con el
+     * precio de cada presentación para agregarla directo.
+     *
+     * @return array{productos: list<array{producto_id: int, nombre: string, codigo: string|null, marca: string|null, unidad: string, existencia: string|null, estado: string, precio: float, presentaciones: list<array{id: int, etiqueta: string, precio: float}>}>, hay_mas: bool}
      */
-    private function buscarProductos(string $termino): array
+    private function consultarCatalogo(string $termino, int $limite): array
     {
-        $like = '%'.addcslashes($termino, '%_\\').'%';
         $lista = $this->listaPrecio();
+        $categoria = $this->categoriaId;
 
-        $productos = Producto::query()
-            ->with('unidadMedida')
-            ->where('activo', true)
-            ->where(fn (Builder $query): Builder => $query
+        $consulta = Producto::query()
+            ->with(['unidadMedida', 'marca', 'presentaciones.unidadMedida'])
+            ->where('activo', true);
+
+        if ($termino !== '') {
+            $like = '%'.addcslashes($termino, '%_\\').'%';
+
+            $consulta->where(fn (Builder $query): Builder => $query
                 ->where('nombre', 'ilike', $like)
                 ->orWhere('codigo', 'ilike', $like)
-                ->orWhere('codigo_barras', $termino))
-            ->orderBy('nombre')
-            ->limit(15)
-            ->get();
+                ->orWhere('codigo_barras', $termino));
+        }
 
+        if ($categoria !== null) {
+            $consulta->where(fn (Builder $query): Builder => $query
+                ->where('categoria_id', $categoria)
+                ->orWhereIn('categoria_id', Categoria::query()->where('parent_id', $categoria)->select('id')));
+        }
+
+        $productos = $consulta->orderBy('nombre')->limit($limite + 1)->get();
         $resultados = [];
 
-        foreach ($productos as $producto) {
-            $existencia = $producto->controla_stock
-                ? 'Existencia: '.cantidadFormato((float) $producto->stock).' '.$producto->unidadMedida->abreviatura
-                : 'Servicio';
+        foreach ($productos->take($limite) as $producto) {
+            $presentaciones = [];
+
+            foreach ($producto->presentaciones as $presentacion) {
+                if (! $presentacion->activo) {
+                    continue;
+                }
+
+                $presentacion->setRelation('producto', $producto);
+
+                $presentaciones[] = [
+                    'id'       => $presentacion->id,
+                    'etiqueta' => $presentacion->etiqueta(),
+                    'precio'   => PrecioProducto::unitario($producto, $presentacion, $lista),
+                ];
+            }
+
+            $estado = match (true) {
+                ! $producto->controla_stock   => 'servicio',
+                (float) $producto->stock <= 0 => 'agotado',
+                $producto->estaBajoMinimo()   => 'bajo',
+                default                       => 'ok',
+            };
 
             $resultados[] = [
                 'producto_id' => $producto->id,
-                'etiqueta'    => $producto->nombre,
-                'detalle'     => ($producto->codigo !== null ? $producto->codigo.' · ' : '').$existencia,
-                'precio'      => PrecioProducto::unitario($producto, null, $lista),
+                'nombre'      => $producto->nombre,
+                'codigo'      => $producto->codigo,
+                'marca'       => $producto->marca?->nombre,
+                'unidad'      => $producto->unidadMedida->nombre,
+                'existencia'  => $producto->controla_stock
+                    ? cantidadFormato((float) $producto->stock).' '.$producto->unidadMedida->abreviatura
+                    : null,
+                'estado'         => $estado,
+                'precio'         => PrecioProducto::unitario($producto, null, $lista),
+                'presentaciones' => $presentaciones,
             ];
         }
 
-        return $resultados;
+        return ['productos' => $resultados, 'hay_mas' => $productos->count() > $limite];
     }
 
     /**
@@ -755,6 +1195,9 @@ class PuntoDeVenta extends Page
     }
 
     /**
+     * Arma la venta con el formulario (documento, precio, cliente) y las
+     * líneas de pago sumadas por método.
+     *
      * @param array<string, mixed> $estado
      */
     private function datosVenta(array $estado): DatosVenta
@@ -766,8 +1209,25 @@ class PuntoDeVenta extends Page
                 productoId: (int) $linea['producto_id'],
                 cantidad: self::numero($linea['cantidad']),
                 presentacionId: self::idOpcional($linea['presentacion_id']),
-                descuentoPct: self::numero($linea['descuento']),
+                descuento: self::numero($linea['descuento']),
+                tipoDescuento: TipoDescuento::desdeEstado($linea['descuento_tipo'] ?? null),
             );
+        }
+
+        // Sin la caché del request: después de cobrar se vacía el carrito.
+        $total = CalculadoraVenta::totales($this->calcularCarrito())['total'];
+        $montos = ['efectivo' => 0.0, 'tarjeta' => 0.0, 'transferencia' => 0.0];
+        $referencias = ['tarjeta' => null, 'transferencia' => null];
+        $efectivoTecleado = false;
+
+        foreach ($this->pagosResueltos($total) as $pago) {
+            $montos[$pago['metodo']] = ($montos[$pago['metodo']] ?? 0.0) + $pago['monto'];
+
+            if ($pago['metodo'] === 'efectivo') {
+                $efectivoTecleado = $efectivoTecleado || $pago['tecleado'];
+            } elseif ($pago['referencia'] !== null && ($referencias[$pago['metodo']] ?? null) === null) {
+                $referencias[$pago['metodo']] = $pago['referencia'];
+            }
         }
 
         return new DatosVenta(
@@ -777,11 +1237,14 @@ class PuntoDeVenta extends Page
             clienteId: self::idOpcional($estado['cliente_id'] ?? null),
             clienteNombre: self::texto($estado['cliente_nombre'] ?? null),
             clienteRtn: self::texto($estado['cliente_rtn'] ?? null),
-            efectivoRecibido: self::montoOpcional($estado['efectivo_recibido'] ?? null),
-            montoTarjeta: self::numero($estado['monto_tarjeta'] ?? null),
-            referenciaTarjeta: self::texto($estado['referencia_tarjeta'] ?? null),
-            montoTransferencia: self::numero($estado['monto_transferencia'] ?? null),
-            referenciaTransferencia: self::texto($estado['referencia_transferencia'] ?? null),
+            // Efectivo sin monto tecleado = paga exacto.
+            efectivoRecibido: $efectivoTecleado ? round($montos['efectivo'], 2) : null,
+            montoTarjeta: round($montos['tarjeta'], 2),
+            referenciaTarjeta: $referencias['tarjeta'],
+            montoTransferencia: round($montos['transferencia'], 2),
+            referenciaTransferencia: $referencias['transferencia'],
+            descuentoGlobal: self::numero($this->venta['descuento_global'] ?? null),
+            tipoDescuentoGlobal: TipoDescuento::desdeEstado($this->venta['descuento_global_tipo'] ?? null),
         );
     }
 

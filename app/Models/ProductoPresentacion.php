@@ -18,7 +18,8 @@ use Illuminate\Support\Carbon;
  * factor queda en 0.01 (cada clavo descuenta 0.01 lb del inventario).
  *
  * El usuario teclea `factor_cantidad` y `factor_modo`; el `factor` se
- * calcula al guardar.
+ * calcula al guardar. Con `margen` la presentación tiene su propio
+ * margen (la caja cerrada suele ganar menos que la libra).
  *
  * @property int $id
  * @property int $producto_id
@@ -29,6 +30,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $factor_cantidad
  * @property string|null $codigo_barras
  * @property string|null $precio_venta
+ * @property string|null $margen
  * @property bool $activo
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
@@ -49,6 +51,7 @@ class ProductoPresentacion extends Model
         'factor_cantidad',
         'codigo_barras',
         'precio_venta',
+        'margen',
         'activo',
     ];
 
@@ -68,6 +71,7 @@ class ProductoPresentacion extends Model
             'factor_modo'     => EquivalenciaPresentacion::class,
             'factor_cantidad' => 'decimal:4',
             'precio_venta'    => 'decimal:2',
+            'margen'          => 'decimal:2',
             'activo'          => 'boolean',
         ];
     }

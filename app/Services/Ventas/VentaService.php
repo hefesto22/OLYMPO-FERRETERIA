@@ -12,6 +12,7 @@ use App\Domain\ValueObjects\RTN;
 use App\Enums\EstadoTurno;
 use App\Enums\EstadoVenta;
 use App\Enums\MetodoPago;
+use App\Enums\TipoDescuento;
 use App\Enums\TipoDocumentoVenta;
 use App\Enums\TipoIsv;
 use App\Enums\TipoMovimientoInventario;
@@ -87,7 +88,8 @@ final class VentaService
                 $numero = $this->numeracion->siguienteRecibo();
             }
 
-            $venta = $this->crearVenta($datos, $turno, $cajero, $cliente, $nombre, $rtn, $numero, $rango, $totales, $pagos);
+            $descuentoGlobal = round(array_sum(array_column($lineas, 'descuento_global')), 2);
+            $venta = $this->crearVenta($datos, $turno, $cajero, $cliente, $nombre, $rtn, $numero, $rango, $totales, $pagos, $descuentoGlobal);
             $this->guardarLineasYDescontarStock($venta, $lineas);
 
             foreach ($pagos['lineas'] as $pago) {
@@ -148,10 +150,15 @@ final class VentaService
     }
 
     /**
-     * Calcula cada línea con el precio de la lista y valida cantidad,
-     * presentación y descuento.
+     * Calcula cada línea con el precio de la lista, valida cantidad,
+     * presentación y descuentos, y reparte el descuento global.
      *
-     * @return list<array{producto: Producto, presentacion: ProductoPresentacion|null, unidad: string, cantidad: float, factor: float, cantidad_base: float, precio: float, descuento_pct: float, tipo_isv: TipoIsv, bruto: float, descuento: float, total: float, base: float, isv: float}>
+     * El tope del rol (en %) se revisa en cada línea y en la venta entera:
+     * lo rebajado por las líneas más el global no puede pasar del tope
+     * sobre el importe sin descuentos (5 % en una línea y otro 5 % global
+     * ya no caben en un tope de 5 %).
+     *
+     * @return list<array{producto: Producto, presentacion: ProductoPresentacion|null, unidad: string, cantidad: float, factor: float, cantidad_base: float, precio: float, descuento_tipo: TipoDescuento, descuento_valor: float, descuento_pct: float, descuento_global: float, tipo_isv: TipoIsv, bruto: float, descuento: float, total: float, base: float, isv: float}>
      */
     private function prepararLineas(DatosVenta $datos, User $cajero): array
     {
@@ -167,7 +174,12 @@ final class VentaService
             ->keyBy('id');
 
         $descuentoMaximo = DescuentoPermitido::para($cajero);
-        $resultado = [];
+
+        if ($datos->descuentoGlobal < 0) {
+            throw DescuentoNoPermitidoException::negativo();
+        }
+
+        $previas = [];
 
         foreach ($datos->lineas as $linea) {
             $producto = $productos->get($linea->productoId);
@@ -191,8 +203,8 @@ final class VentaService
                 throw VentaInvalidaException::cantidadNoFraccionable($producto->nombre, mb_strtolower($unidad->nombre));
             }
 
-            if ($linea->descuentoPct < 0 || ($linea->descuentoPct - $descuentoMaximo) > 0.001) {
-                throw DescuentoNoPermitidoException::excede($producto->nombre, $linea->descuentoPct, $descuentoMaximo);
+            if ($linea->descuento < 0) {
+                throw DescuentoNoPermitidoException::negativo();
             }
 
             $factor = $presentacion !== null ? (float) $presentacion->factor : 1.0;
@@ -203,24 +215,66 @@ final class VentaService
                 throw VentaInvalidaException::sinPrecio($producto->nombre);
             }
 
-            $calculo = CalculadoraVenta::linea($precio, $linea->cantidad, $linea->descuentoPct, $producto->tipo_isv->tasa());
+            $calculo = CalculadoraVenta::linea($precio, $linea->cantidad, $linea->descuento, $producto->tipo_isv->tasa(), $linea->tipoDescuento);
+            $porcentaje = CalculadoraVenta::porcentaje($calculo['bruto'], $linea->descuento, $linea->tipoDescuento);
+
+            if (($porcentaje - $descuentoMaximo) > 0.001) {
+                throw DescuentoNoPermitidoException::excede($producto->nombre, $porcentaje, $descuentoMaximo);
+            }
+
+            $previas[] = [
+                'producto'        => $producto,
+                'presentacion'    => $presentacion,
+                'unidad'          => $presentacion !== null ? $presentacion->etiqueta() : $producto->unidadMedida->nombre,
+                'cantidad'        => $linea->cantidad,
+                'factor'          => $factor,
+                'cantidad_base'   => round($linea->cantidad * $factor, 6),
+                'precio'          => $precio,
+                'descuento_tipo'  => $linea->tipoDescuento,
+                'descuento_valor' => round($linea->descuento, 2),
+                'descuento_pct'   => round($porcentaje, 2),
+                'tipo_isv'        => $producto->tipo_isv,
+                'bruto'           => $calculo['bruto'],
+                'total'           => $calculo['total'],
+            ];
+        }
+
+        $partes = CalculadoraVenta::repartirGlobal(array_column($previas, 'total'), $datos->descuentoGlobal, $datos->tipoDescuentoGlobal);
+        $resultado = [];
+        $bruto = 0.0;
+        $rebajado = 0.0;
+
+        foreach ($previas as $indice => $previa) {
+            $parte = $partes[$indice] ?? 0.0;
+            $calculo = CalculadoraVenta::conParteGlobal($previa['bruto'], $previa['total'], $parte, $previa['tipo_isv']->tasa());
+            $bruto += $calculo['bruto'];
+            $rebajado += $calculo['descuento'];
 
             $resultado[] = [
-                'producto'      => $producto,
-                'presentacion'  => $presentacion,
-                'unidad'        => $presentacion !== null ? $presentacion->etiqueta() : $producto->unidadMedida->nombre,
-                'cantidad'      => $linea->cantidad,
-                'factor'        => $factor,
-                'cantidad_base' => round($linea->cantidad * $factor, 6),
-                'precio'        => $precio,
-                'descuento_pct' => $linea->descuentoPct,
-                'tipo_isv'      => $producto->tipo_isv,
-                'bruto'         => $calculo['bruto'],
-                'descuento'     => $calculo['descuento'],
-                'total'         => $calculo['total'],
-                'base'          => $calculo['base'],
-                'isv'           => $calculo['isv'],
+                'producto'         => $previa['producto'],
+                'presentacion'     => $previa['presentacion'],
+                'unidad'           => $previa['unidad'],
+                'cantidad'         => $previa['cantidad'],
+                'factor'           => $previa['factor'],
+                'cantidad_base'    => $previa['cantidad_base'],
+                'precio'           => $previa['precio'],
+                'descuento_tipo'   => $previa['descuento_tipo'],
+                'descuento_valor'  => $previa['descuento_valor'],
+                'descuento_pct'    => $previa['descuento_pct'],
+                'descuento_global' => $parte,
+                'tipo_isv'         => $previa['tipo_isv'],
+                'bruto'            => $calculo['bruto'],
+                'descuento'        => $calculo['descuento'],
+                'total'            => $calculo['total'],
+                'base'             => $calculo['base'],
+                'isv'              => $calculo['isv'],
             ];
+        }
+
+        $porcentajeVenta = $bruto > 0 ? $rebajado / $bruto * 100 : 0.0;
+
+        if (($porcentajeVenta - $descuentoMaximo) > 0.001) {
+            throw DescuentoNoPermitidoException::excedeVenta($porcentajeVenta, $descuentoMaximo);
         }
 
         return $resultado;
@@ -336,6 +390,7 @@ final class VentaService
     /**
      * @param array{descuento: float, importe_exento: float, importe_gravado_15: float, importe_gravado_18: float, isv_15: float, isv_18: float, subtotal: float, total: float} $totales
      * @param array{efectivo_recibido: float, cambio: float, lineas: list<array{metodo: MetodoPago, monto: float, referencia: string|null}>} $pagos
+     * @param float $descuentoGlobal lo rebajado por el descuento a toda la venta (ya repartido en las líneas)
      */
     private function crearVenta(
         DatosVenta $datos,
@@ -348,36 +403,40 @@ final class VentaService
         ?RangoCai $rango,
         array $totales,
         array $pagos,
+        float $descuentoGlobal,
     ): Venta {
         $venta = new Venta;
         $venta->forceFill([
-            'numero'             => $numero,
-            'tipo_documento'     => $datos->tipoDocumento,
-            'caja_id'            => $turno->caja_id,
-            'turno_caja_id'      => $turno->id,
-            'user_id'            => $cajero->id,
-            'cliente_id'         => $cliente?->id,
-            'cliente_nombre'     => $nombre,
-            'cliente_rtn'        => $rtn,
-            'lista_precio'       => $datos->listaPrecio,
-            'estado'             => EstadoVenta::Completada,
-            'rango_cai_id'       => $rango?->id,
-            'cai'                => $rango?->cai,
-            'cai_rango_desde'    => $rango !== null ? $rango->formatearNumero($rango->rango_inicial) : null,
-            'cai_rango_hasta'    => $rango !== null ? $rango->formatearNumero($rango->rango_final) : null,
-            'cai_fecha_limite'   => $rango?->fecha_limite_emision,
-            'datos_emisor'       => ConfiguracionEmpresa::actual()->datosEmisor(),
-            'descuento'          => $totales['descuento'],
-            'importe_exento'     => $totales['importe_exento'],
-            'importe_gravado_15' => $totales['importe_gravado_15'],
-            'importe_gravado_18' => $totales['importe_gravado_18'],
-            'isv_15'             => $totales['isv_15'],
-            'isv_18'             => $totales['isv_18'],
-            'subtotal'           => $totales['subtotal'],
-            'total'              => $totales['total'],
-            'efectivo_recibido'  => $pagos['efectivo_recibido'],
-            'cambio'             => $pagos['cambio'],
-            'notas'              => $datos->notas,
+            'numero'                 => $numero,
+            'tipo_documento'         => $datos->tipoDocumento,
+            'caja_id'                => $turno->caja_id,
+            'turno_caja_id'          => $turno->id,
+            'user_id'                => $cajero->id,
+            'cliente_id'             => $cliente?->id,
+            'cliente_nombre'         => $nombre,
+            'cliente_rtn'            => $rtn,
+            'lista_precio'           => $datos->listaPrecio,
+            'estado'                 => EstadoVenta::Completada,
+            'rango_cai_id'           => $rango?->id,
+            'cai'                    => $rango?->cai,
+            'cai_rango_desde'        => $rango !== null ? $rango->formatearNumero($rango->rango_inicial) : null,
+            'cai_rango_hasta'        => $rango !== null ? $rango->formatearNumero($rango->rango_final) : null,
+            'cai_fecha_limite'       => $rango?->fecha_limite_emision,
+            'datos_emisor'           => ConfiguracionEmpresa::actual()->datosEmisor(),
+            'descuento'              => $totales['descuento'],
+            'descuento_global_tipo'  => $descuentoGlobal > 0 ? $datos->tipoDescuentoGlobal : null,
+            'descuento_global_valor' => $descuentoGlobal > 0 ? round($datos->descuentoGlobal, 2) : 0.0,
+            'descuento_global'       => $descuentoGlobal,
+            'importe_exento'         => $totales['importe_exento'],
+            'importe_gravado_15'     => $totales['importe_gravado_15'],
+            'importe_gravado_18'     => $totales['importe_gravado_18'],
+            'isv_15'                 => $totales['isv_15'],
+            'isv_18'                 => $totales['isv_18'],
+            'subtotal'               => $totales['subtotal'],
+            'total'                  => $totales['total'],
+            'efectivo_recibido'      => $pagos['efectivo_recibido'],
+            'cambio'                 => $pagos['cambio'],
+            'notas'                  => $datos->notas,
         ])->save();
 
         return $venta;
@@ -387,7 +446,7 @@ final class VentaService
      * Guarda las líneas y descuenta el stock en orden de producto (siempre
      * el mismo orden de bloqueo: dos ventas simultáneas no se traban).
      *
-     * @param list<array{producto: Producto, presentacion: ProductoPresentacion|null, unidad: string, cantidad: float, factor: float, cantidad_base: float, precio: float, descuento_pct: float, tipo_isv: TipoIsv, bruto: float, descuento: float, total: float, base: float, isv: float}> $lineas
+     * @param list<array{producto: Producto, presentacion: ProductoPresentacion|null, unidad: string, cantidad: float, factor: float, cantidad_base: float, precio: float, descuento_tipo: TipoDescuento, descuento_valor: float, descuento_pct: float, descuento_global: float, tipo_isv: TipoIsv, bruto: float, descuento: float, total: float, base: float, isv: float}> $lineas
      */
     private function guardarLineasYDescontarStock(Venta $venta, array $lineas): void
     {
@@ -405,7 +464,10 @@ final class VentaService
                 'factor'                   => $linea['factor'],
                 'cantidad_base'            => $linea['cantidad_base'],
                 'precio_unitario'          => $linea['precio'],
+                'descuento_tipo'           => $linea['descuento_tipo'],
+                'descuento_valor'          => $linea['descuento_valor'],
                 'descuento_pct'            => $linea['descuento_pct'],
+                'descuento_global'         => $linea['descuento_global'],
                 'descuento'                => $linea['descuento'],
                 'tipo_isv'                 => $linea['tipo_isv'],
                 'base_imponible'           => $linea['base'],

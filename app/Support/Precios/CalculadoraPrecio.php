@@ -57,6 +57,46 @@ final class CalculadoraPrecio
     }
 
     /**
+     * Ganancia sobre el costo (fracción: 0.30 = 30 %) de un precio con ISV.
+     * Null si falta precio o costo.
+     */
+    public static function ganancia(float $precioConIsv, float $costo, float $tasaIsv): ?float
+    {
+        if ($precioConIsv <= 0 || $costo <= 0) {
+            return null;
+        }
+
+        return ($precioConIsv / (1 + $tasaIsv) - $costo) / $costo;
+    }
+
+    /**
+     * Ganancia mínima esperada (fracción sobre el costo) de una
+     * presentación: su margen propio o el del producto. En lempiras, el
+     * margen propio es por presentación y el del producto por unidad base.
+     * Null si el producto lleva precio a mano o falta el dato.
+     */
+    public static function margenObjetivo(TipoMargen $tipo, ?float $margenPropio, ?float $margenProducto, float $factor, float $costoPresentacion): ?float
+    {
+        $margen = $margenPropio ?? $margenProducto;
+
+        if ($tipo === TipoMargen::Manual || $margen === null) {
+            return null;
+        }
+
+        if ($tipo === TipoMargen::Porcentaje) {
+            return $margen / 100;
+        }
+
+        if ($costoPresentacion <= 0) {
+            return null;
+        }
+
+        $monto = $margenPropio !== null ? $margenPropio : $margen * $factor;
+
+        return $monto / $costoPresentacion;
+    }
+
+    /**
      * Al lempira hacia arriba, mínimo L 1. Primero se redondea a centavos
      * para que el ruido de los decimales (22.999999… o 23.000001) no
      * cambie un precio que ya es exacto.

@@ -70,13 +70,20 @@
                 </td>
                 <td class="der">{{ lempiras((float) $detalle->total + (float) $detalle->descuento) }}</td>
             </tr>
-            @if ((float) $detalle->descuento > 0)
+            {{-- El descuento de la línea; su parte del descuento a toda la venta va abajo, junta. --}}
+            @if ($detalle->descuentoDeLinea() > 0)
                 <tr>
-                    <td class="sangria">Descuento {{ cantidadFormato((float) $detalle->descuento_pct, 2) }} %</td>
-                    <td class="der">− {{ lempiras((float) $detalle->descuento) }}</td>
+                    <td class="sangria">{{ $detalle->etiquetaDescuento() }}</td>
+                    <td class="der">− {{ lempiras($detalle->descuentoDeLinea()) }}</td>
                 </tr>
             @endif
         @endforeach
+        @if ((float) $venta->descuento_global > 0)
+            <tr>
+                <td>{{ $venta->etiquetaDescuentoGlobal() }}</td>
+                <td class="der">− {{ lempiras((float) $venta->descuento_global) }}</td>
+            </tr>
+        @endif
     </table>
 
     <div class="linea"></div>

@@ -8,6 +8,7 @@ use App\Enums\ListaPrecio;
 use App\Enums\TipoMargen;
 use App\Models\Producto;
 use App\Models\ProductoPresentacion;
+use App\Support\Precios\CalculadoraPrecio;
 use App\Support\Ventas\PrecioProducto;
 use Filament\Infolists\Components\IconEntry;
 use Filament\Infolists\Components\ImageEntry;
@@ -92,13 +93,15 @@ class ProductoInfolist
                             ->state(fn (Producto $record): string => self::margen($record, $record->margen_mayoreo))
                             ->visible(fn (Producto $record): bool => $record->usaMargen()),
                         TextEntry::make('costo_promedio')
-                            ->label('Costo promedio (sin ISV)')
-                            ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state, 4)),
+                            ->label('Costo ponderado (sin ISV)')
+                            ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state, 4))
+                            ->helperText('Promedio ponderado de todas las entradas al inventario.')
+                            ->weight('bold'),
                         TextEntry::make('ultimo_costo')
                             ->label('Último costo (sin ISV)')
                             ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state, 4)),
                         TextEntry::make('ganancia')
-                            ->label('Ganancia sobre el costo')
+                            ->label('Ganancia sobre el costo ponderado')
                             ->state(function (Producto $record): string {
                                 $ganancia = $record->gananciaSobreCosto();
 
@@ -107,7 +110,7 @@ class ProductoInfolist
                         TextEntry::make('costo_precio')
                             ->label('Costo con que se calculó el precio')
                             ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state, 4))
-                            ->helperText('Si el costo promedio bajó y el precio sigue igual, hay un cambio de precio por revisar.')
+                            ->helperText('Si el costo ponderado bajó y el precio sigue igual, hay un cambio de precio por revisar.')
                             ->visible(fn (Producto $record): bool => $record->usaMargen()
                                 && abs((float) $record->costo_precio - (float) $record->costo_promedio) >= 0.0001),
                     ]),
@@ -145,7 +148,10 @@ class ProductoInfolist
                                 TableColumn::make('Presentación'),
                                 TableColumn::make('Equivale a'),
                                 TableColumn::make('Código de barras'),
+                                TableColumn::make('Costo (sin ISV)'),
+                                TableColumn::make('Margen'),
                                 TableColumn::make('Precio (ISV incl.)'),
+                                TableColumn::make('Ganancia'),
                             ])
                             ->schema([
                                 TextEntry::make('etiqueta')
@@ -154,12 +160,79 @@ class ProductoInfolist
                                     ->state(fn (ProductoPresentacion $record): string => $record->equivalencia()),
                                 TextEntry::make('codigo_barras')
                                     ->placeholder('—'),
+                                TextEntry::make('costo')
+                                    ->state(fn (ProductoPresentacion $record): string => lempiras((float) $record->producto->costo_promedio * (float) $record->factor)),
+                                TextEntry::make('margen')
+                                    ->state(fn (ProductoPresentacion $record): string => match (true) {
+                                        ! $record->producto->usaMargen() => '—',
+                                        $record->margen === null         => 'Del producto',
+                                        default                          => self::margenPresentacion($record),
+                                    }),
                                 TextEntry::make('precio_venta')
                                     ->state(fn (ProductoPresentacion $record): string => lempiras(PrecioProducto::unitario($record->producto, $record, ListaPrecio::Publico)))
-                                    ->helperText(fn (ProductoPresentacion $record): ?string => $record->precio_venta === null ? 'Automático' : null),
+                                    ->helperText(fn (ProductoPresentacion $record): string => $record->precio_venta === null ? 'Automático' : 'A mano'),
+                                TextEntry::make('ganancia')
+                                    ->state(fn (ProductoPresentacion $record): string => self::gananciaPresentacion($record)['texto'])
+                                    ->color(fn (ProductoPresentacion $record): string => self::gananciaPresentacion($record)['color'])
+                                    ->weight('bold'),
                             ]),
                     ]),
             ]);
+    }
+
+    /**
+     * Ganancia de un precio (ISV incl.) sobre su costo, para mostrar:
+     * "+L. 345.00 · 34.5%". En rojo si pierde o si gana menos que el
+     * margen esperado; en verde si cumple.
+     *
+     * @return array{texto: string, color: string}
+     */
+    public static function ganancia(?float $precio, float $costo, float $tasaIsv, ?float $objetivo): array
+    {
+        $fraccion = $precio !== null ? CalculadoraPrecio::ganancia($precio, $costo, $tasaIsv) : null;
+
+        if ($precio === null || $fraccion === null) {
+            return ['texto' => '—', 'color' => 'gray'];
+        }
+
+        $monto = $precio / (1 + $tasaIsv) - $costo;
+        $texto = ($monto < 0 ? '−' : '+').lempiras(abs($monto)).' · '.porcentaje($fraccion, 1);
+        $bajoMargen = $monto < 0 || ($objetivo !== null && $fraccion + 0.0001 < $objetivo);
+
+        return ['texto' => $texto, 'color' => $bajoMargen ? 'danger' : 'success'];
+    }
+
+    /**
+     * @return array{texto: string, color: string}
+     */
+    private static function gananciaPresentacion(ProductoPresentacion $presentacion): array
+    {
+        $producto = $presentacion->producto;
+        $factor = (float) $presentacion->factor;
+        $costo = (float) $producto->costo_promedio * $factor;
+
+        return self::ganancia(
+            PrecioProducto::unitario($producto, $presentacion, ListaPrecio::Publico),
+            $costo,
+            $producto->tipo_isv->tasa(),
+            CalculadoraPrecio::margenObjetivo(
+                $producto->margen_tipo,
+                $presentacion->margen !== null ? (float) $presentacion->margen : null,
+                $producto->margen_publico !== null ? (float) $producto->margen_publico : null,
+                $factor,
+                $costo,
+            ),
+        );
+    }
+
+    /**
+     * Margen propio de la presentación: "15 %" o "L. 150.00 c/u".
+     */
+    private static function margenPresentacion(ProductoPresentacion $presentacion): string
+    {
+        return $presentacion->producto->margen_tipo === TipoMargen::Monto
+            ? lempiras((float) $presentacion->margen).' c/u'
+            : cantidadFormato((float) $presentacion->margen, 2).' %';
     }
 
     /**

@@ -202,7 +202,7 @@ final class PrecioService
 
             $presentaciones[$presentacion->id] = [
                 'etiqueta' => $presentacion->etiqueta(),
-                'precio'   => $producto->precioConMargen($costo, factor: (float) $presentacion->factor) ?? 0.0,
+                'precio'   => $producto->precioPresentacionConMargen($costo, $presentacion) ?? 0.0,
             ];
         }
 

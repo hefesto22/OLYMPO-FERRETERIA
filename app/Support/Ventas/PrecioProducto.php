@@ -15,8 +15,9 @@ use App\Support\Precios\CalculadoraPrecio;
  *  - Unidad base: precio público o, en mayoreo, el precio mayoreo si existe.
  *  - Presentación con precio propio: ese precio.
  *  - Presentación sin precio propio (precio automático):
- *      · producto con margen → el margen sobre el costo de la presentación
- *        (una bolsa de 1 lb o un clavo suelto cuestan lo que llevan);
+ *      · producto con margen → el margen propio de la presentación (o el
+ *        del producto) sobre su costo: una bolsa de 1 lb o un clavo
+ *        suelto cuestan lo que llevan;
  *      · producto a mano → el precio base × factor.
  *    Siempre en lempiras enteros y nunca menos de L 1.
  *  - En mayoreo, una presentación nunca sale más cara que en público
@@ -37,7 +38,7 @@ final class PrecioProducto
             return $usarMayoreo ? round(min($publicoBase, (float) $mayoreoBase), 2) : round($publicoBase, 2);
         }
 
-        [$publicoAutomatico, $mayoreoAutomatico] = self::automaticos($producto, (float) $presentacion->factor);
+        [$publicoAutomatico, $mayoreoAutomatico] = self::automaticos($producto, $presentacion);
 
         $publico = $presentacion->precio_venta !== null
             ? round((float) $presentacion->precio_venta, 2)
@@ -51,18 +52,20 @@ final class PrecioProducto
     }
 
     /**
-     * Precio automático (público y mayoreo) de `$factor` unidades base.
+     * Precio automático (público y mayoreo) de una presentación.
      *
      * @return array{0: float, 1: float|null}
      */
-    public static function automaticos(Producto $producto, float $factor): array
+    public static function automaticos(Producto $producto, ProductoPresentacion $presentacion): array
     {
+        $factor = (float) $presentacion->factor;
+
         if ($producto->usaMargen()) {
             $costo = (float) $producto->costo_precio;
 
             return [
-                $producto->precioConMargen($costo, factor: $factor) ?? 0.0,
-                $producto->precioConMargen($costo, mayoreo: true, factor: $factor),
+                $producto->precioPresentacionConMargen($costo, $presentacion) ?? 0.0,
+                $producto->precioPresentacionConMargen($costo, $presentacion, mayoreo: true),
             ];
         }
 

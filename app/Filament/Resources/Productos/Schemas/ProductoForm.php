@@ -7,12 +7,15 @@ namespace App\Filament\Resources\Productos\Schemas;
 use App\Enums\EquivalenciaPresentacion;
 use App\Enums\TipoIsv;
 use App\Enums\TipoMargen;
+use App\Filament\Schemas\Components\CodigoBarrasField;
 use App\Filament\Schemas\Components\MontoField;
 use App\Models\Producto;
 use App\Models\ProductoPresentacion;
 use App\Models\UnidadMedida;
 use App\Support\Precios\CalculadoraPrecio;
+use Closure;
 use Filament\Forms\Components\FileUpload;
+use Filament\Forms\Components\Hidden;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
@@ -61,12 +64,10 @@ class ProductoForm
                     ->maxLength(30)
                     ->unique()
                     ->placeholder('Automático (P-000123)'),
-                TextInput::make('codigo_barras')
+                CodigoBarrasField::make()
                     ->label('Código de barras')
-                    ->maxLength(60)
                     ->unique()
-                    ->prefixIcon(Heroicon::OutlinedQrCode)
-                    ->placeholder('Escanéalo aquí'),
+                    ->placeholder('Escanéalo o escríbelo'),
                 TextInput::make('ubicacion')
                     ->label('Ubicación')
                     ->maxLength(80)
@@ -135,7 +136,7 @@ class ProductoForm
     private static function seccionPrecios(): Section
     {
         return Section::make('Precio e impuesto')
-            ->description('Con margen, el precio sale del costo promedio: costo + margen + ISV, redondeado al lempira hacia arriba.')
+            ->description('Con margen, el precio sale del costo ponderado: costo + margen + ISV, redondeado al lempira hacia arriba.')
             ->icon(Heroicon::OutlinedBanknotes)
             ->columns(3)
             ->columnSpanFull()
@@ -188,6 +189,16 @@ class ProductoForm
                 // ─── A mano ─────────────────────────────────────────
                 MontoField::make('precio_venta', 'Precio de venta')
                     ->helperText('Por unidad base, con ISV incluido.')
+                    ->rules([
+                        fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                            $costo = self::numero($get('costo_promedio')) ?? self::numero($get('costo_inicial')) ?? 0.0;
+                            $tasa = (TipoIsv::desdeEstado($get('tipo_isv')) ?? TipoIsv::Gravado15)->tasa();
+
+                            if (is_numeric($value) && $costo > 0 && (float) $value / (1 + $tasa) < $costo - 0.005) {
+                                $fail('Queda por debajo del costo ponderado: '.lempiras($costo).' sin ISV.');
+                            }
+                        },
+                    ])
                     ->live(onBlur: true)
                     ->visible(fn (Get $get): bool => ! self::usaMargen($get)),
                 MontoField::make('precio_mayoreo', 'Precio mayoreo / contratista')
@@ -197,16 +208,23 @@ class ProductoForm
                     ->visible(fn (Get $get): bool => ! self::usaMargen($get)),
 
                 // ─── Costos ─────────────────────────────────────────
+                // Solo para cálculos en pantalla (el costo de cada presentación).
+                Hidden::make('costo_promedio')
+                    ->dehydrated(false),
+                Hidden::make('costo_precio')
+                    ->dehydrated(false),
                 TextEntry::make('costo_promedio_vista')
-                    ->label('Costo promedio (sin ISV)')
+                    ->label('Costo ponderado (sin ISV)')
                     ->state(fn (?Producto $record): string => $record !== null ? lempiras((float) $record->costo_promedio, 4) : '—')
+                    ->helperText('Promedio ponderado de todas las entradas al inventario. Sobre este costo se calcula el margen.')
+                    ->weight('bold')
                     ->hiddenOn('create'),
                 TextEntry::make('ultimo_costo_vista')
                     ->label('Último costo de compra (sin ISV)')
                     ->state(fn (?Producto $record): string => $record !== null ? lempiras((float) $record->ultimo_costo, 4) : '—')
                     ->hiddenOn('create'),
                 TextEntry::make('ganancia_vista')
-                    ->label('Ganancia sobre el costo promedio')
+                    ->label('Ganancia sobre el costo ponderado')
                     ->state(fn (Get $get, ?Producto $record): string => self::ganancia($get, $record))
                     ->hiddenOn('create'),
             ]);
@@ -287,7 +305,10 @@ class ProductoForm
                         TableColumn::make('Equivale a')->markAsRequired(),
                         TableColumn::make('Nombre'),
                         TableColumn::make('Código de barras'),
+                        TableColumn::make('Costo (sin ISV)'),
+                        TableColumn::make('Margen propio'),
                         TableColumn::make('Precio (ISV incl.)'),
+                        TableColumn::make('Ganancia'),
                     ])
                     ->schema([
                         Select::make('unidad_medida_id')
@@ -301,6 +322,7 @@ class ProductoForm
                         TextInput::make('factor_cantidad')
                             ->numeric()
                             ->required()
+                            ->live(onBlur: true)
                             ->minValue(0.0001)
                             ->step(0.0001)
                             // El inventario va a 6 decimales: más de 10,000 por unidad base ya no descuenta exacto.
@@ -314,21 +336,53 @@ class ProductoForm
                             // El modelo lo entrega como enum; el select trabaja con su valor.
                             ->formatStateUsing(fn (mixed $state): string => (EquivalenciaPresentacion::desdeEstado($state) ?? EquivalenciaPresentacion::Contiene)->value)
                             ->selectablePlaceholder(false)
-                            ->required(),
+                            ->required()
+                            ->live(),
                         TextInput::make('nombre')
                             ->maxLength(80)
                             ->placeholder('Bolsa 1 lb'),
-                        TextInput::make('codigo_barras')
-                            ->maxLength(60)
+                        CodigoBarrasField::make()
                             ->unique(table: ProductoPresentacion::class, column: 'codigo_barras'),
+                        TextEntry::make('costo_vista')
+                            ->state(function (Get $get): string {
+                                $costo = self::datosPresentacion($get)['costo'];
+
+                                return $costo > 0 ? lempiras($costo) : '—';
+                            }),
+                        TextInput::make('margen')
+                            ->numeric()
+                            ->minValue(0)
+                            ->step(0.01)
+                            ->suffix(fn (Get $get): string => TipoMargen::desdeEstado($get('../../margen_tipo')) === TipoMargen::Monto ? 'L c/u' : '%')
+                            ->placeholder(fn (Get $get): string => self::margenDelProducto($get))
+                            // Con precio a mano no hay margen que aplicar.
+                            ->disabled(fn (Get $get): bool => (TipoMargen::desdeEstado($get('../../margen_tipo')) ?? TipoMargen::Manual) === TipoMargen::Manual)
+                            ->live(onBlur: true),
                         TextInput::make('precio_venta')
                             ->numeric()
                             ->minValue(0)
                             ->step(0.01)
                             ->prefix((string) config('honduras.moneda.simbolo', 'L.'))
-                            ->placeholder(fn (Get $get): string => TipoMargen::desdeEstado($get('../../margen_tipo')) === TipoMargen::Manual
-                                ? 'Base × cantidad'
-                                : 'Automático'),
+                            // Vacío = precio automático; se muestra el que va a salir.
+                            ->placeholder(function (Get $get): string {
+                                $automatico = self::datosPresentacion($get)['automatico'];
+
+                                return $automatico !== null ? number_format($automatico, 2) : 'Sin costo';
+                            })
+                            ->rules([
+                                fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
+                                    $datos = self::datosPresentacion($get);
+
+                                    if (is_numeric($value) && $datos['costo'] > 0 && (float) $value / (1 + $datos['tasa']) < $datos['costo'] - 0.005) {
+                                        $fail('Queda por debajo del costo: '.lempiras($datos['costo']).' sin ISV.');
+                                    }
+                                },
+                            ])
+                            ->live(onBlur: true),
+                        TextEntry::make('ganancia_vista')
+                            ->state(fn (Get $get): string => self::gananciaPresentacion($get)['texto'])
+                            ->color(fn (Get $get): string => self::gananciaPresentacion($get)['color'])
+                            ->weight('bold'),
                     ])
                     ->defaultItems(0)
                     ->reorderable(false)
@@ -358,6 +412,89 @@ class ProductoForm
         }
 
         return $opciones;
+    }
+
+    /**
+     * Costo, precio y ganancia de una fila de presentaciones con lo que se
+     * está tecleando. El costo es el ponderado × lo que lleva (Caja 50 lb =
+     * 50 × costo; clavo suelto = costo / 100). El precio automático sale
+     * del costo con que se fijaron los precios vigentes, igual que al vender.
+     *
+     * @return array{costo: float, automatico: float|null, precio: float|null, objetivo: float|null, tasa: float}
+     */
+    private static function datosPresentacion(Get $get): array
+    {
+        $tipo = TipoMargen::desdeEstado($get('../../margen_tipo')) ?? TipoMargen::Manual;
+        $tasa = (TipoIsv::desdeEstado($get('../../tipo_isv')) ?? TipoIsv::Gravado15)->tasa();
+        $modo = EquivalenciaPresentacion::desdeEstado($get('factor_modo')) ?? EquivalenciaPresentacion::Contiene;
+        $factor = $modo->factor(self::numero($get('factor_cantidad')) ?? 0.0);
+
+        // Al crear todavía no hay costo ponderado: se usa el costo inicial tecleado.
+        $costoPonderado = self::numero($get('../../costo_promedio')) ?? self::numero($get('../../costo_inicial')) ?? 0.0;
+        $costoPrecio = self::numero($get('../../costo_precio')) ?? 0.0;
+        $costoPrecio = $costoPrecio > 0 ? $costoPrecio : $costoPonderado;
+
+        $margenPropio = self::numero($get('margen'));
+        $margenProducto = self::numero($get('../../margen_publico'));
+        $automatico = null;
+
+        if ($factor > 0 && $tipo === TipoMargen::Manual) {
+            $base = self::numero($get('../../precio_venta')) ?? 0.0;
+            $automatico = $base > 0 ? CalculadoraPrecio::redondear($base * $factor) : null;
+        } elseif ($factor > 0 && $costoPrecio > 0 && ($margenPropio ?? $margenProducto) !== null) {
+            // El margen propio en lempiras es por presentación; la fórmula lo quiere por unidad base.
+            $margen = $tipo === TipoMargen::Monto && $margenPropio !== null
+                ? $margenPropio / $factor
+                : (float) ($margenPropio ?? $margenProducto);
+
+            $automatico = CalculadoraPrecio::precio($costoPrecio, $tipo, $margen, $tasa, $factor);
+        }
+
+        $costo = $costoPonderado * $factor;
+
+        return [
+            'costo'      => $costo,
+            'automatico' => $automatico,
+            'precio'     => self::numero($get('precio_venta')) ?? $automatico,
+            'objetivo'   => CalculadoraPrecio::margenObjetivo($tipo, $margenPropio, $margenProducto, $factor, $costo),
+            'tasa'       => $tasa,
+        ];
+    }
+
+    /**
+     * @return array{texto: string, color: string}
+     */
+    private static function gananciaPresentacion(Get $get): array
+    {
+        $datos = self::datosPresentacion($get);
+
+        return ProductoInfolist::ganancia($datos['precio'], $datos['costo'], $datos['tasa'], $datos['objetivo']);
+    }
+
+    /**
+     * Lo que se usa si la presentación no tiene margen propio: "30" o, en
+     * lempiras, el margen por unidad base × lo que lleva.
+     */
+    private static function margenDelProducto(Get $get): string
+    {
+        $tipo = TipoMargen::desdeEstado($get('../../margen_tipo')) ?? TipoMargen::Manual;
+        $margen = self::numero($get('../../margen_publico'));
+
+        if ($tipo === TipoMargen::Manual || $margen === null) {
+            return '—';
+        }
+
+        if ($tipo === TipoMargen::Monto) {
+            $modo = EquivalenciaPresentacion::desdeEstado($get('factor_modo')) ?? EquivalenciaPresentacion::Contiene;
+            $margen *= $modo->factor(self::numero($get('factor_cantidad')) ?? 0.0);
+        }
+
+        return cantidadFormato($margen, 2).' (del producto)';
+    }
+
+    private static function numero(mixed $valor): ?float
+    {
+        return is_numeric($valor) ? (float) $valor : null;
     }
 
     private static function usaMargen(Get $get): bool
@@ -405,7 +542,7 @@ class ProductoForm
 
         $paso = CalculadoraPrecio::desglose($costo, $tipo, $margen, $isv->tasa());
         $margenTexto = $tipo === TipoMargen::Monto ? lempiras($margen) : cantidadFormato($margen, 2).' %';
-        $explicacion = 'Costo '.lempiras($costo).' + '.$margenTexto.' = '.lempiras($paso['sin_isv']);
+        $explicacion = 'Costo ponderado '.lempiras($costo).' + '.$margenTexto.' = '.lempiras($paso['sin_isv']);
 
         if ($isv->tasa() > 0) {
             $explicacion .= ' · con ISV '.lempiras($paso['exacto']);

@@ -80,3 +80,36 @@ it('con margen calcula cada presentación sobre su propio costo', function (): v
         ->and(PrecioProducto::unitario($clavo, $caja, ListaPrecio::Publico))->toBe(1406.0)
         ->and(PrecioProducto::unitario($clavo, $caja, ListaPrecio::Mayoreo))->toBe(1298.0);
 });
+
+it('una presentación con margen propio usa ese margen', function (): void {
+    $clavo = (new Producto)->forceFill([
+        'margen_tipo'    => TipoMargen::Porcentaje,
+        'margen_publico' => 30,
+        'margen_mayoreo' => 20,
+        'costo_precio'   => 18.80,
+        'precio_venta'   => 29.00,
+        'precio_mayoreo' => 26.00,
+    ]);
+
+    $caja = (new ProductoPresentacion)->forceFill(['factor' => 50, 'precio_venta' => null, 'margen' => 15]);
+
+    // 940 × 1.15 × 1.15 = 1243.15 → L 1244. El mayoreo (20 %) saldría más caro: queda igual.
+    expect(PrecioProducto::unitario($clavo, $caja, ListaPrecio::Publico))->toBe(1244.0)
+        ->and(PrecioProducto::unitario($clavo, $caja, ListaPrecio::Mayoreo))->toBe(1244.0);
+});
+
+it('con margen en lempiras el margen propio es por presentación', function (): void {
+    $clavo = (new Producto)->forceFill([
+        'margen_tipo'    => TipoMargen::Monto,
+        'margen_publico' => 5,
+        'margen_mayoreo' => null,
+        'costo_precio'   => 18.80,
+        'precio_venta'   => 28.00,
+        'precio_mayoreo' => null,
+    ]);
+
+    $caja = (new ProductoPresentacion)->forceFill(['factor' => 50, 'precio_venta' => null, 'margen' => 150]);
+
+    // (940 + 150) × 1.15 = 1253.50 → L 1254.
+    expect(PrecioProducto::unitario($clavo, $caja, ListaPrecio::Publico))->toBe(1254.0);
+});

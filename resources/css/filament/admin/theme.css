@@ -1,5 +1,8 @@
 @import '../../../../vendor/filament/filament/resources/css/theme.css';
 
+/* Tema Olympo (estilo shadcn): ver olympo.css. */
+@import './olympo.css';
+
 /* Clases de Tailwind usadas en las páginas y vistas propias del panel
    (punto de venta, datos de la empresa). */
 @source '../../../../app/Filament/**/*';
