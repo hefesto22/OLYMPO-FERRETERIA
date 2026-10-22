@@ -23,10 +23,12 @@ class ClienteForm
         return $schema
             ->columns(2)
             ->components([
+                // Nombre y dirección se guardan en mayúsculas (Cliente); así se ven mientras se escriben.
                 TextInput::make('nombre')
                     ->label('Nombre o razón social')
                     ->required()
                     ->maxLength(150)
+                    ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                     ->columnSpanFull(),
                 RTNField::make()
                     ->unique(),
@@ -45,6 +47,7 @@ class ClienteForm
                 TextInput::make('direccion')
                     ->label('Dirección')
                     ->maxLength(255)
+                    ->extraInputAttributes(['style' => 'text-transform: uppercase'])
                     ->columnSpanFull(),
                 Fieldset::make('Crédito')
                     ->columns(3)

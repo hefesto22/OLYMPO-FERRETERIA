@@ -47,6 +47,7 @@ use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Computed;
 
 /**
@@ -137,6 +138,13 @@ class PuntoDeVenta extends Page
     /** El bloque del descuento a toda la venta se muestra al pedirlo. */
     public bool $descuentoGlobalAbierto = false;
 
+    /**
+     * Documento, precio y cliente: abiertos, o en una línea de resumen para
+     * que la lista de productos tenga espacio. Se cierran con el primer
+     * producto y se abren solos si algo de ahí no pasa al cobrar.
+     */
+    public bool $datosAbiertos = true;
+
     public static function getNavigationGroup(): ?string
     {
         return 'Ventas';
@@ -183,9 +191,12 @@ class PuntoDeVenta extends Page
                             ->required()
                             ->live(),
                     ]),
+                // El nombre y el RTN de la factura salen del cliente: sin cliente
+                // es "Consumidor final", sin RTN.
                 Select::make('cliente_id')
                     ->label('Cliente')
                     ->placeholder('Consumidor final')
+                    ->helperText(fn (Get $get): ?string => $get('tipo_documento') === 'factura' && blank($get('cliente_id')) ? 'Para factura con RTN, busca al cliente o regístralo con +.' : null)
                     ->searchable()
                     ->getSearchResultsUsing(fn (string $search): array => self::buscarClientes($search))
                     ->getOptionLabelUsing(fn (mixed $value): ?string => is_numeric($value) ? Cliente::query()->find((int) $value)?->etiqueta() : null)
@@ -193,7 +204,9 @@ class PuntoDeVenta extends Page
                         TextInput::make('nombre')
                             ->label('Nombre o razón social')
                             ->required()
-                            ->maxLength(150),
+                            ->maxLength(150)
+                            // Se guarda en mayúsculas (Cliente); así se ve mientras se escribe.
+                            ->extraInputAttributes(['style' => 'text-transform: uppercase']),
                         RTNField::make()
                             ->unique(table: 'clientes', column: 'rtn'),
                         TelefonoHondurasField::make('telefono', 'Teléfono'),
@@ -209,19 +222,27 @@ class PuntoDeVenta extends Page
                         $cliente = is_numeric($state) ? Cliente::query()->find((int) $state) : null;
 
                         $set('lista_precio', $cliente !== null ? $cliente->tipo_precio->value : ListaPrecio::Publico->value);
-                        $set('cliente_nombre', $cliente?->nombre);
-                        $set('cliente_rtn', $cliente?->rtn);
                     }),
-                Grid::make(2)
-                    ->visible(fn (Get $get): bool => $get('tipo_documento') === 'factura')
-                    ->schema([
-                        TextInput::make('cliente_nombre')
-                            ->label('Nombre en la factura')
-                            ->placeholder('Consumidor final')
-                            ->maxLength(150),
-                        RTNField::make('cliente_rtn'),
-                    ]),
             ]);
+    }
+
+    /**
+     * Lo que se ve de los datos de la venta cuando están cerrados.
+     *
+     * @return array{factura: bool, mayoreo: bool, cliente: string, rtn: string|null}
+     */
+    public function resumenDatos(): array
+    {
+        $venta = $this->venta ?? [];
+        $clienteId = self::idOpcional($venta['cliente_id'] ?? null);
+        $cliente = $clienteId !== null ? Cliente::query()->find($clienteId) : null;
+
+        return [
+            'factura' => ($venta['tipo_documento'] ?? null) === TipoDocumentoVenta::Factura->value,
+            'mayoreo' => ($venta['lista_precio'] ?? null) === ListaPrecio::Mayoreo->value,
+            'cliente' => $cliente !== null ? $cliente->nombre : 'Consumidor final',
+            'rtn'     => self::texto($cliente?->rtn),
+        ];
     }
 
     // ─── Catálogo ─────────────────────────────────────────────────────────
@@ -375,6 +396,12 @@ class PuntoDeVenta extends Page
     public function quitar(string $clave): void
     {
         unset($this->lineas[$clave]);
+
+        // Carrito vacío: los datos de la venta vuelven a la vista.
+        if ($this->lineas === []) {
+            $this->datosAbiertos = true;
+        }
+
         $this->dispatch('enfocar-busqueda');
     }
 
@@ -752,7 +779,14 @@ class PuntoDeVenta extends Page
             return;
         }
 
-        $estado = $this->form->getState();
+        try {
+            $estado = $this->form->getState();
+        } catch (ValidationException $e) {
+            // Lo que no pasa está en los datos de la venta: se abren para verlo.
+            $this->datosAbiertos = true;
+
+            throw $e;
+        }
 
         try {
             $venta = app(VentaService::class)->registrar($this->datosVenta($estado), $this->usuario());
@@ -987,9 +1021,16 @@ class PuntoDeVenta extends Page
         foreach ($this->lineas as $clave => $linea) {
             if ((int) $linea['producto_id'] === $productoId && self::idOpcional($linea['presentacion_id']) === $presentacionId) {
                 $this->lineas[$clave]['cantidad'] = self::numero($linea['cantidad']) + 1;
+                $this->dispatch('linea-agregada', clave: (string) $clave);
 
                 return (string) $clave;
             }
+        }
+
+        // Con el primer producto, los datos de la venta pasan a una línea de
+        // resumen para dejarle el espacio a la lista.
+        if ($this->lineas === []) {
+            $this->datosAbiertos = false;
         }
 
         $clave = 'l'.Str::lower(Str::random(10));
@@ -1001,6 +1042,8 @@ class PuntoDeVenta extends Page
             'descuento'       => null,
             'descuento_tipo'  => TipoDescuento::Porcentaje->value,
         ];
+
+        $this->dispatch('linea-agregada', clave: $clave);
 
         return $clave;
     }
@@ -1041,6 +1084,7 @@ class PuntoDeVenta extends Page
         $this->busqueda = '';
         $this->limite = self::POR_PAGINA;
         $this->descuentoGlobalAbierto = false;
+        $this->datosAbiertos = true;
 
         $this->form->fill([
             'tipo_documento' => TipoDocumentoVenta::Recibo->value,
@@ -1234,9 +1278,8 @@ class PuntoDeVenta extends Page
             lineas: $lineas,
             tipoDocumento: TipoDocumentoVenta::desdeEstado($estado['tipo_documento'] ?? null) ?? TipoDocumentoVenta::Recibo,
             listaPrecio: ListaPrecio::desdeEstado($estado['lista_precio'] ?? null) ?? ListaPrecio::Publico,
+            // Nombre y RTN del documento: los del cliente (VentaService los toma de ahí).
             clienteId: self::idOpcional($estado['cliente_id'] ?? null),
-            clienteNombre: self::texto($estado['cliente_nombre'] ?? null),
-            clienteRtn: self::texto($estado['cliente_rtn'] ?? null),
             // Efectivo sin monto tecleado = paga exacto.
             efectivoRecibido: $efectivoTecleado ? round($montos['efectivo'], 2) : null,
             montoTarjeta: round($montos['tarjeta'], 2),

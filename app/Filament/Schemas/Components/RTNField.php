@@ -23,6 +23,8 @@ final class RTNField
     {
         return TextInput::make($name)
             ->label('RTN')
+            // Filament pone en minúscula la primera letra de la etiqueta en los errores ("El campo rTN…").
+            ->validationAttribute('RTN')
             ->placeholder('08019985012345')
             ->maxLength(RTN::LONGITUD)
             ->minLength(RTN::LONGITUD)

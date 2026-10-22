@@ -55,9 +55,10 @@ class DemoVentasSeeder extends Seeder
         }
 
         $clientes = [
-            ['nombre' => 'Constructora El Progreso', 'rtn' => '05011999000123', 'tipo_precio' => ListaPrecio::Mayoreo, 'telefono' => '99887766'],
-            ['nombre' => 'Juan Pérez (maestro de obra)', 'rtn' => null, 'tipo_precio' => ListaPrecio::Mayoreo, 'telefono' => '98765432'],
-            ['nombre' => 'María López', 'rtn' => null, 'tipo_precio' => ListaPrecio::Publico, 'telefono' => '33445566'],
+            // En mayúsculas, como los guarda Cliente: si no, firstOrCreate no los encuentra al volver a sembrar.
+            ['nombre' => 'CONSTRUCTORA EL PROGRESO', 'rtn' => '05011999000123', 'tipo_precio' => ListaPrecio::Mayoreo, 'telefono' => '99887766'],
+            ['nombre' => 'JUAN PÉREZ (MAESTRO DE OBRA)', 'rtn' => null, 'tipo_precio' => ListaPrecio::Mayoreo, 'telefono' => '98765432'],
+            ['nombre' => 'MARÍA LÓPEZ', 'rtn' => null, 'tipo_precio' => ListaPrecio::Publico, 'telefono' => '33445566'],
         ];
 
         foreach ($clientes as $cliente) {

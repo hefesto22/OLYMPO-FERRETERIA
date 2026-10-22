@@ -194,16 +194,44 @@
 
         .pos-datos { padding: 0.875rem 1.125rem; border-bottom: 1px solid var(--pos-linea); }
 
+        /* Datos de la venta cerrados: una sola línea con el documento, el
+           precio y el cliente. Al tocarla se abren. */
+        .pos-datos.es-cerrado { padding-block: 0.5rem; }
+        .pos-datos.es-cerrado .pos-datos__campos,
+        .pos-datos:not(.es-cerrado) .pos-resumen { display: none; }
+        .pos-resumen { display: flex; align-items: center; gap: 0.625rem; width: calc(100% + 1rem); margin-inline: -0.5rem; padding: 0.375rem 0.5rem; border-radius: 0.625rem; text-align: left; }
+        .pos-resumen:hover { background: var(--pos-linea-suave); }
+        .pos-resumen:focus-visible { outline: 2px solid var(--primary-500); outline-offset: 0; }
+        .pos-resumen__documento { flex: none; display: inline-flex; align-items: center; gap: 0.375rem; padding: 0.3125rem 0.625rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 600; background: var(--pos-texto); color: var(--pos-superficie); }
+        .pos-resumen__documento.es-factura { background: var(--primary-500); color: var(--gray-950); }
+        .pos-resumen__documento svg { width: 1rem; height: 1rem; }
+        .pos-resumen__texto { flex: 1; display: grid; min-width: 0; font-size: 0.875rem; line-height: 1.3; color: var(--pos-tenue); }
+        .pos-resumen__texto > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .pos-resumen__texto strong { font-weight: 600; color: var(--pos-texto); }
+        .pos-resumen__rtn { font-size: 0.75rem; }
+        .pos-resumen__mayoreo { font-weight: 600; color: var(--warning-700); }
+        .dark .pos-resumen__mayoreo { color: var(--warning-400); }
+        .pos-resumen__cambiar { flex: none; display: inline-flex; align-items: center; gap: 0.125rem; font-size: 0.8125rem; font-weight: 600; color: var(--primary-600); }
+        .dark .pos-resumen__cambiar { color: var(--primary-400); }
+        .pos-resumen__cambiar svg { width: 1rem; height: 1rem; }
+        .pos-datos__listo { display: flex; align-items: center; gap: 0.125rem; margin: 0.625rem 0 0 auto; padding: 0.25rem 0.5rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 600; color: var(--pos-tenue); }
+        .pos-datos__listo:hover { color: var(--pos-texto); background: var(--pos-linea-suave); }
+        .pos-datos__listo svg { width: 1rem; height: 1rem; }
+
         .pos-lineas { flex: 1; min-height: 6rem; overflow-y: auto; overscroll-behavior: contain; }
         .pos-carrito__vacio { display: grid; place-items: center; height: 100%; min-height: 6rem; padding: 1.5rem; text-align: center; font-size: 0.875rem; color: var(--pos-tenue); }
 
-        .pos-linea { padding: 0.75rem 1.125rem; border-bottom: 1px solid var(--pos-linea-suave); }
+        .pos-linea { padding: 0.625rem 1.125rem; border-bottom: 1px solid var(--pos-linea-suave); }
+
+        /* La línea que se acaba de agregar (o que sumó uno) se ilumina un momento. */
+        .pos-linea.es-nueva { animation: pos-nueva 1.2s ease-out; }
+        @keyframes pos-nueva { from { background: var(--pos-resalte); } to { background: transparent; } }
         .pos-linea__arriba { display: flex; align-items: flex-start; gap: 0.5rem; }
         .pos-linea__nombre { flex: 1; font-weight: 600; line-height: 1.3; }
         .pos-linea__quitar { flex: none; padding: 0.125rem; border-radius: 0.375rem; color: var(--pos-tenue); }
         .pos-linea__quitar:hover { color: var(--danger-600); background: color-mix(in oklab, var(--danger-500) 12%, transparent); }
         .pos-linea__quitar svg { width: 1.125rem; height: 1.125rem; }
-        .pos-linea__controles { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 0.625rem; margin-top: 0.5rem; }
+        .pos-linea__controles { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 0.625rem; margin-top: 0.375rem; }
         .pos-linea__unidad { font-size: 0.875rem; color: var(--pos-tenue); }
         .pos-linea__total { min-width: 5.5rem; text-align: right; font-weight: 700; }
         .pos-linea__abajo { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.875rem; margin-top: 0.375rem; font-size: 0.8125rem; color: var(--pos-tenue); }
@@ -387,6 +415,7 @@
 
         @media (prefers-reduced-motion: reduce) {
             .pos-cobrar { transition: none; }
+            .pos-linea.es-nueva { animation: none; }
         }
     </style>
 
@@ -444,6 +473,21 @@
 
                 window.dispatchEvent(new CustomEvent('escaner-aviso', { detail: resultado }));
             },
+            // La línea agregada queda a la vista en la lista del carrito.
+            resaltar(clave) {
+                requestAnimationFrame(() => {
+                    const linea = this.$root.querySelector(`[data-linea='${clave}']`);
+
+                    if (! linea || linea.offsetParent === null) {
+                        return;
+                    }
+
+                    linea.scrollIntoView({ block: 'nearest' });
+                    linea.classList.remove('es-nueva');
+                    void linea.offsetWidth;
+                    linea.classList.add('es-nueva');
+                });
+            },
         }"
         x-bind:data-vista="vista"
         x-init="enfocar()"
@@ -451,6 +495,7 @@
         x-on:keydown.f9.window.prevent="$wire.cobrar()"
         x-on:enfocar-busqueda.window="enfocar()"
         x-on:codigo-escaneado.window="leido($event.detail)"
+        x-on:linea-agregada.window="resaltar($event.detail.clave)"
         x-on:escaner-cerrado.window="$event.detail.origen === 'pos' && enfocar()"
         x-on:imprimir-ticket.window="
             vista = 'catalogo';
@@ -484,6 +529,9 @@
                 $puedeDescontar = $descuentoMaximo > 0 && $articulos > 0;
                 $mostrarGlobal = $puedeDescontar && ($descuentoGlobalAbierto || $descuentos['global'] > 0 || filled($this->venta['descuento_global'] ?? null));
                 $soloEfectivo = count($pagos) === 1 && $pagos[0]['metodo'] === 'efectivo';
+                // Pagado y cambio solo dicen algo si se tecleó un monto o hay varios pagos.
+                $mostrarSaldo = $totales['total'] > 0 && (count($pagos) > 1 || collect($pagos)->contains('tecleado', true));
+                $resumenDatos = $this->resumenDatos();
             @endphp
 
             {{-- ── Turno ─────────────────────────────────────────────── --}}
@@ -639,13 +687,53 @@
                         @endif
                     </div>
 
-                    <div class="pos-datos">
-                        {{ $this->form }}
+                    <div @class(['pos-datos', 'es-cerrado' => ! $datosAbiertos])>
+                        <button
+                            type="button"
+                            class="pos-resumen"
+                            x-on:click="$el.parentElement.classList.remove('es-cerrado'); $wire.$set('datosAbiertos', true)"
+                            title="Cambiar documento, precio o cliente"
+                        >
+                            <span @class(['pos-resumen__documento', 'es-factura' => $resumenDatos['factura']])>
+                                <x-filament::icon :icon="$resumenDatos['factura'] ? 'heroicon-m-document-check' : 'heroicon-m-document-text'" />
+                                {{ $resumenDatos['factura'] ? 'Factura' : 'Recibo' }}
+                            </span>
+                            <span class="pos-resumen__texto">
+                                <span>
+                                    @if ($resumenDatos['mayoreo'])
+                                        <span class="pos-resumen__mayoreo">Mayoreo</span>,
+                                    @endif
+                                    <strong>{{ $resumenDatos['cliente'] }}</strong>
+                                </span>
+                                @if ($resumenDatos['factura'] && $resumenDatos['rtn'] !== null)
+                                    <span class="pos-resumen__rtn pos-cifra">RTN {{ $resumenDatos['rtn'] }}</span>
+                                @endif
+                            </span>
+                            <span class="pos-resumen__cambiar">
+                                Cambiar
+                                <x-filament::icon icon="heroicon-m-chevron-down" />
+                            </span>
+                        </button>
+
+                        <div class="pos-datos__campos">
+                            {{ $this->form }}
+
+                            @if ($articulos > 0)
+                                <button
+                                    type="button"
+                                    class="pos-datos__listo"
+                                    x-on:click="$el.closest('.pos-datos').classList.add('es-cerrado'); $wire.$set('datosAbiertos', false)"
+                                >
+                                    Listo
+                                    <x-filament::icon icon="heroicon-m-chevron-up" />
+                                </button>
+                            @endif
+                        </div>
                     </div>
 
                     <div class="pos-lineas">
                         @forelse ($carrito as $linea)
-                            <div class="pos-linea" wire:key="linea-{{ $linea['clave'] }}">
+                            <div class="pos-linea" wire:key="linea-{{ $linea['clave'] }}" data-linea="{{ $linea['clave'] }}">
                                 <div class="pos-linea__arriba">
                                     <div class="pos-linea__nombre">{{ $linea['producto']->nombre }}</div>
                                     <button
@@ -862,7 +950,7 @@
                                 </div>
                             @endif
 
-                            @if ($totales['total'] > 0)
+                            @if ($mostrarSaldo)
                                 <div class="pos-saldo">
                                     <span>Pagado <strong class="pos-cifra">{{ lempiras($cobro['pagado']) }}</strong></span>
                                     @if ($cobro['restante'] > 0)

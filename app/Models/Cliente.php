@@ -15,6 +15,8 @@ use Illuminate\Support\Carbon;
 
 /**
  * Cliente de la ferretería. La venta sin cliente es "Consumidor final".
+ * El nombre y la dirección se guardan en mayúsculas; la factura toma de
+ * aquí el nombre y el RTN.
  *
  * @property int $id
  * @property string $nombre
@@ -82,6 +84,18 @@ class Cliente extends Model
             'dias_credito'    => 'integer',
             'activo'          => 'boolean',
         ];
+    }
+
+    protected static function booted(): void
+    {
+        // Nombre y dirección en mayúsculas, como van en la factura. Así quedan
+        // venga de donde venga el cliente (punto de venta, pantalla de clientes, importación).
+        static::saving(function (Cliente $cliente): void {
+            $cliente->nombre = mb_strtoupper(trim($cliente->nombre));
+
+            $direccion = trim((string) $cliente->direccion);
+            $cliente->direccion = $direccion !== '' ? mb_strtoupper($direccion) : null;
+        });
     }
 
     /**
