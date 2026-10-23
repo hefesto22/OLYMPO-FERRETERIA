@@ -9,7 +9,7 @@ use App\Models\ProductoPresentacion;
 use App\Services\Inventario\InventarioService;
 
 /**
- * Cómo queda cada producto si se confirma la compra: lo que hay en
+ * Cómo queda cada producto si se confirma la entrada: lo que hay en
  * existencia y a qué costo, lo que entra, el costo ponderado nuevo y el
  * precio de venta que va a quedar.
  *
@@ -21,7 +21,7 @@ use App\Services\Inventario\InventarioService;
  *
  * @phpstan-type LineaProyectada array{unidad: string, controla_stock: bool, existencia: float, costo_antes: float, entra: float, costo_entrada: float, costo_nuevo: float, precio_antes: float, precio_nuevo: float, precio_propuesto: float|null, estado: string}
  */
-final class ProyeccionCompra
+final class ProyeccionEntrada
 {
     /** Precio que sube solo con el costo. */
     public const SUBE = 'sube';

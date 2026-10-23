@@ -72,10 +72,30 @@ class Proveedor extends Model
     }
 
     /**
+     * Facturas y recibos registrados en Compras.
+     *
      * @return HasMany<Compra, $this>
      */
     public function compras(): HasMany
     {
         return $this->hasMany(Compra::class, 'proveedor_id');
+    }
+
+    /**
+     * Mercadería que entró al inventario de este proveedor.
+     *
+     * @return HasMany<EntradaInventario, $this>
+     */
+    public function entradas(): HasMany
+    {
+        return $this->hasMany(EntradaInventario::class, 'proveedor_id');
+    }
+
+    /**
+     * Con compras o entradas registradas no se borra: el historial lo necesita.
+     */
+    public function tieneMovimientos(): bool
+    {
+        return $this->compras()->withTrashed()->exists() || $this->entradas()->exists();
     }
 }

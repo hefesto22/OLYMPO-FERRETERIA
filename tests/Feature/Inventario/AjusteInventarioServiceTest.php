@@ -71,7 +71,7 @@ it('maneja fracciones de la unidad base (metros, libras)', function (): void {
     $producto = Producto::factory()->create();
     $inventario = app(InventarioService::class);
 
-    $inventario->registrarEntrada($producto, 100, 12.80, TipoMovimientoInventario::EntradaCompra);
+    $inventario->registrarEntrada($producto, 100, 12.80, TipoMovimientoInventario::Entrada);
     $inventario->registrarSalida($producto, 12.5, TipoMovimientoInventario::AjusteSalida);
 
     expect((float) $producto->refresh()->stock)->toBe(87.5);

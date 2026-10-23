@@ -8,10 +8,10 @@ use App\Enums\TipoIsv;
 use App\Models\Producto;
 
 /**
- * Totales en vivo del formulario de compra, con las mismas fórmulas que
- * CompraDetalle::calcularImportes() aplica al guardar.
+ * Totales en vivo del formulario de entrada de inventario, con las mismas
+ * fórmulas que EntradaInventarioDetalle::calcularImportes() aplica al guardar.
  */
-final class TotalesCompra
+final class TotalesEntrada
 {
     /**
      * @param array<array-key, mixed>|null $lineas estado del repeater "detalles"

@@ -2,11 +2,11 @@
 
 declare(strict_types=1);
 
-namespace App\Filament\Resources\Compras\Schemas;
+namespace App\Filament\Resources\EntradasInventario\Schemas;
 
 use App\Enums\EstadoDocumento;
-use App\Models\Compra;
-use App\Models\CompraDetalle;
+use App\Models\EntradaInventario;
+use App\Models\EntradaInventarioDetalle;
 use Filament\Infolists\Components\RepeatableEntry;
 use Filament\Infolists\Components\RepeatableEntry\TableColumn;
 use Filament\Infolists\Components\TextEntry;
@@ -15,13 +15,13 @@ use Filament\Schemas\Components\Section;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 
-class CompraInfolist
+class EntradaInventarioInfolist
 {
     public static function configure(Schema $schema): Schema
     {
         return $schema
             ->components([
-                Section::make('Compra')
+                Section::make('Entrada')
                     ->icon(Heroicon::OutlinedDocumentText)
                     ->columns(4)
                     ->columnSpanFull()
@@ -33,9 +33,10 @@ class CompraInfolist
                             ->label('Estado')
                             ->badge(),
                         TextEntry::make('proveedor.nombre')
-                            ->label('Proveedor'),
-                        TextEntry::make('numero_factura_proveedor')
-                            ->label('Factura del proveedor')
+                            ->label('Proveedor')
+                            ->placeholder('Sin proveedor'),
+                        TextEntry::make('referencia')
+                            ->label('Referencia')
                             ->placeholder('—'),
                         TextEntry::make('fecha')
                             ->label('Fecha')
@@ -53,14 +54,14 @@ class CompraInfolist
                         TextEntry::make('anulada_at')
                             ->label('Anulada')
                             ->dateTime('d/m/Y H:i')
-                            ->visible(fn (Compra $record): bool => $record->estado === EstadoDocumento::Anulado),
+                            ->visible(fn (EntradaInventario $record): bool => $record->estado === EstadoDocumento::Anulado),
                         TextEntry::make('anuladaPor.name')
                             ->label('Anuló')
-                            ->visible(fn (Compra $record): bool => $record->estado === EstadoDocumento::Anulado),
+                            ->visible(fn (EntradaInventario $record): bool => $record->estado === EstadoDocumento::Anulado),
                         TextEntry::make('motivo_anulacion')
                             ->label('Motivo de anulación')
                             ->columnSpan(2)
-                            ->visible(fn (Compra $record): bool => $record->estado === EstadoDocumento::Anulado),
+                            ->visible(fn (EntradaInventario $record): bool => $record->estado === EstadoDocumento::Anulado),
                         TextEntry::make('notas')
                             ->label('Notas')
                             ->placeholder('—')
@@ -77,7 +78,8 @@ class CompraInfolist
                                 TableColumn::make('Producto'),
                                 TableColumn::make('Presentación'),
                                 TableColumn::make('Cantidad'),
-                                TableColumn::make('Costo unit.'),
+                                TableColumn::make('Costo neto'),
+                                TableColumn::make('Con ISV'),
                                 TableColumn::make('Subtotal'),
                                 TableColumn::make('ISV'),
                                 TableColumn::make('Total'),
@@ -85,11 +87,13 @@ class CompraInfolist
                             ->schema([
                                 TextEntry::make('producto.nombre'),
                                 TextEntry::make('presentacion_etiqueta')
-                                    ->state(fn (CompraDetalle $record): string => $record->etiquetaUnidad()),
+                                    ->state(fn (EntradaInventarioDetalle $record): string => $record->etiquetaUnidad()),
                                 TextEntry::make('cantidad')
                                     ->formatStateUsing(fn (mixed $state): string => cantidadFormato((float) $state)),
                                 TextEntry::make('costo_unitario')
-                                    ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state, 4)),
+                                    ->formatStateUsing(fn (mixed $state): string => costoLempiras((float) $state)),
+                                TextEntry::make('costo_con_isv')
+                                    ->state(fn (EntradaInventarioDetalle $record): string => costoLempiras(round((float) $record->costo_unitario * (1 + $record->tipo_isv->tasa()), 4))),
                                 TextEntry::make('subtotal')
                                     ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state)),
                                 TextEntry::make('isv')

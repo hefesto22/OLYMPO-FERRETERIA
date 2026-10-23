@@ -86,7 +86,7 @@ class MovimientoInventario extends Model
     }
 
     /**
-     * Compra, ajuste o venta que originó el movimiento.
+     * Entrada, ajuste o venta que originó el movimiento.
      *
      * @return MorphTo<Model, $this>
      */

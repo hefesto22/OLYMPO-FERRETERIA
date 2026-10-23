@@ -30,7 +30,7 @@ class MovimientoInventarioResource extends Resource
 
     protected static ?string $slug = 'kardex';
 
-    protected static ?int $navigationSort = 6;
+    protected static ?int $navigationSort = 7;
 
     public static function getNavigationGroup(): ?string
     {

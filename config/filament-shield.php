@@ -4,7 +4,7 @@ declare(strict_types=1);
 use App\Filament\Pages\Escritorio;
 use App\Filament\Resources\AjustesInventario\AjusteInventarioResource;
 use App\Filament\Resources\CambiosPrecio\CambioPrecioResource;
-use App\Filament\Resources\Compras\CompraResource;
+use App\Filament\Resources\EntradasInventario\EntradaInventarioResource;
 use App\Filament\Resources\TurnosCaja\TurnoCajaResource;
 use App\Filament\Resources\Ventas\VentaResource;
 use App\Filament\Widgets\Pendientes;
@@ -186,14 +186,14 @@ return [
                 'update',
                 'delete',
             ],
-            // Acciones propias del negocio → permisos Confirmar:Compra, Anular:Compra,
-            // Aplicar:AjusteInventario, Anular:Venta, Cerrar:TurnoCaja y
-            // Aprobar:CambioPrecio (se suman a los default).
-            CompraResource::class           => ['confirmar', 'anular'],
-            AjusteInventarioResource::class => ['aplicar'],
-            VentaResource::class            => ['anular'],
-            TurnoCajaResource::class        => ['cerrar'],
-            CambioPrecioResource::class     => ['aprobar'],
+            // Acciones propias del negocio → permisos Confirmar:EntradaInventario,
+            // Anular:EntradaInventario, Aplicar:AjusteInventario, Anular:Venta,
+            // Cerrar:TurnoCaja y Aprobar:CambioPrecio (se suman a los default).
+            EntradaInventarioResource::class => ['confirmar', 'anular'],
+            AjusteInventarioResource::class  => ['aplicar'],
+            VentaResource::class             => ['anular'],
+            TurnoCajaResource::class         => ['cerrar'],
+            CambioPrecioResource::class      => ['aprobar'],
         ],
         'exclude' => [
             //

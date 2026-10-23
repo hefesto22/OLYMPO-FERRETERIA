@@ -1,19 +1,19 @@
 {{--
-    Cómo queda el producto de esta línea si se confirma la compra:
+    Cómo queda el producto de esta línea si se confirma la entrada:
     lo que hay en existencia + lo que entra = costo ponderado nuevo, y el
-    precio de venta que resulta. Datos de App\Support\Inventario\ProyeccionCompra.
+    precio de venta que resulta. Datos de App\Support\Inventario\ProyeccionEntrada.
 --}}
-@use('App\Support\Inventario\ProyeccionCompra')
+@use('App\Support\Inventario\ProyeccionEntrada')
 
 @php
     $textoPrecio = null;
 
     if ($linea !== null) {
         $textoPrecio = match ($linea['estado']) {
-            ProyeccionCompra::SUBE   => 'Sube de '.lempiras($linea['precio_antes']),
-            ProyeccionCompra::BAJA   => 'Bajaría a '.lempiras((float) $linea['precio_propuesto']).': tú decides',
-            ProyeccionCompra::NUEVO  => 'Primer precio',
-            ProyeccionCompra::MANUAL => 'A mano, no cambia',
+            ProyeccionEntrada::SUBE   => 'Sube de '.lempiras($linea['precio_antes']),
+            ProyeccionEntrada::BAJA   => 'Bajaría a '.lempiras((float) $linea['precio_propuesto']).': tú decides',
+            ProyeccionEntrada::NUEVO  => 'Primer precio',
+            ProyeccionEntrada::MANUAL => 'A mano, no cambia',
             default                  => 'Sigue igual',
         };
     }
@@ -22,7 +22,7 @@
 <div class="ol-proyeccion">
     @if ($linea === null)
         <p class="ol-proyeccion__vacio">Elige el producto.</p>
-    @elseif ($linea['estado'] === ProyeccionCompra::SERVICIO)
+    @elseif ($linea['estado'] === ProyeccionEntrada::SERVICIO)
         <p class="ol-proyeccion__vacio">Servicio: no lleva existencia.</p>
     @elseif ($linea['entra'] <= 0)
         <p class="ol-proyeccion__vacio">

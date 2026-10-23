@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Filament\Resources\Compras\Pages;
 
 use App\Filament\Resources\Compras\CompraResource;
+use App\Filament\Resources\Compras\Widgets\ResumenComprasMes;
 use Filament\Actions\CreateAction;
 use Filament\Resources\Pages\ListRecords;
 
@@ -16,7 +17,14 @@ class ListCompras extends ListRecords
     {
         return [
             CreateAction::make()
-                ->label('Nueva compra'),
+                ->label('Registrar compra'),
+        ];
+    }
+
+    protected function getHeaderWidgets(): array
+    {
+        return [
+            ResumenComprasMes::class,
         ];
     }
 }

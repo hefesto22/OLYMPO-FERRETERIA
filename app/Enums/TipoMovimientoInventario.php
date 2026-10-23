@@ -15,8 +15,8 @@ use Filament\Support\Icons\Heroicon;
 enum TipoMovimientoInventario: string implements HasColor, HasIcon, HasLabel
 {
     case InventarioInicial = 'inventario_inicial';
-    case EntradaCompra = 'entrada_compra';
-    case AnulacionCompra = 'anulacion_compra';
+    case Entrada = 'entrada';
+    case AnulacionEntrada = 'anulacion_entrada';
     case AjusteEntrada = 'ajuste_entrada';
     case AjusteSalida = 'ajuste_salida';
     case SalidaVenta = 'salida_venta';
@@ -26,10 +26,10 @@ enum TipoMovimientoInventario: string implements HasColor, HasIcon, HasLabel
     {
         return match ($this) {
             self::InventarioInicial,
-            self::EntradaCompra,
+            self::Entrada,
             self::AjusteEntrada,
             self::AnulacionVenta => true,
-            self::AnulacionCompra,
+            self::AnulacionEntrada,
             self::AjusteSalida,
             self::SalidaVenta => false,
         };
@@ -39,8 +39,8 @@ enum TipoMovimientoInventario: string implements HasColor, HasIcon, HasLabel
     {
         return match ($this) {
             self::InventarioInicial => 'Inventario inicial',
-            self::EntradaCompra     => 'Compra',
-            self::AnulacionCompra   => 'Anulación de compra',
+            self::Entrada           => 'Entrada de inventario',
+            self::AnulacionEntrada  => 'Anulación de entrada',
             self::AjusteEntrada     => 'Ajuste (entrada)',
             self::AjusteSalida      => 'Ajuste (salida)',
             self::SalidaVenta       => 'Venta',

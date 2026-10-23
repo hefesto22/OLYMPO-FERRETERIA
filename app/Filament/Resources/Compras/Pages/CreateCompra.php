@@ -6,7 +6,6 @@ namespace App\Filament\Resources\Compras\Pages;
 
 use App\Filament\Resources\Compras\CompraResource;
 use App\Models\Compra;
-use App\Services\Inventario\CompraService;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateCompra extends CreateRecord
@@ -18,19 +17,16 @@ class CreateCompra extends CreateRecord
         /** @var Compra $compra */
         $compra = $this->getRecord();
 
-        app(CompraService::class)->recalcularTotales($compra);
+        $compra->guardarRtnEnProveedor();
     }
 
-    /**
-     * Se guarda como borrador y se abre la vista, donde se confirma.
-     */
     protected function getRedirectUrl(): string
     {
-        return CompraResource::getUrl('view', ['record' => $this->getRecord()]);
+        return CompraResource::getUrl('index');
     }
 
     protected function getCreatedNotificationTitle(): ?string
     {
-        return 'Compra guardada como borrador. Revísala y confírmala para que entre al inventario.';
+        return 'Compra registrada';
     }
 }

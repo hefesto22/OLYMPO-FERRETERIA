@@ -97,11 +97,15 @@ class ProductoInfolist
                             ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state, 4))
                             ->helperText('Promedio ponderado de todas las entradas al inventario.')
                             ->weight('bold'),
+                        TextEntry::make('costo_con_isv')
+                            ->label('Te sale en (con ISV)')
+                            ->state(fn (Producto $record): string => costoLempiras(round((float) $record->costo_promedio * (1 + $record->tipo_isv->tasa()), 4)))
+                            ->helperText('El margen se saca sobre este costo.'),
                         TextEntry::make('ultimo_costo')
                             ->label('Último costo (sin ISV)')
                             ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state, 4)),
                         TextEntry::make('ganancia')
-                            ->label('Ganancia sobre el costo ponderado')
+                            ->label('Ganancia sobre lo que te sale')
                             ->state(function (Producto $record): string {
                                 $ganancia = $record->gananciaSobreCosto();
 
@@ -181,9 +185,9 @@ class ProductoInfolist
     }
 
     /**
-     * Ganancia de un precio (ISV incl.) sobre su costo, para mostrar:
-     * "+L. 345.00 · 34.5%". En rojo si pierde o si gana menos que el
-     * margen esperado; en verde si cumple.
+     * Ganancia de un precio (ISV incl.) sobre lo que te sale su costo con
+     * ISV, para mostrar: "+L. 345.00 · 34.5%". En rojo si pierde o si gana
+     * menos que el margen esperado; en verde si cumple.
      *
      * @return array{texto: string, color: string}
      */
@@ -195,7 +199,7 @@ class ProductoInfolist
             return ['texto' => '—', 'color' => 'gray'];
         }
 
-        $monto = $precio / (1 + $tasaIsv) - $costo;
+        $monto = (float) CalculadoraPrecio::gananciaMonto($precio, $costo, $tasaIsv);
         $texto = ($monto < 0 ? '−' : '+').lempiras(abs($monto)).' · '.porcentaje($fraccion, 1);
         $bajoMargen = $monto < 0 || ($objetivo !== null && $fraccion + 0.0001 < $objetivo);
 
@@ -221,6 +225,7 @@ class ProductoInfolist
                 $producto->margen_publico !== null ? (float) $producto->margen_publico : null,
                 $factor,
                 $costo,
+                $producto->tipo_isv->tasa(),
             ),
         );
     }

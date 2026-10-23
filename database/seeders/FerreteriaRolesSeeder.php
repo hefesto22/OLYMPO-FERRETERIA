@@ -40,7 +40,8 @@ class FerreteriaRolesSeeder extends Seeder
             ...$this->permisos('Marca', ['ViewAny', 'View', 'Create', 'Update']),
             ...$this->permisos('UnidadMedida', ['ViewAny', 'View', 'Create', 'Update']),
             ...$this->permisos('Proveedor', ['ViewAny', 'View', 'Create', 'Update']),
-            ...$this->permisos('Compra', ['ViewAny', 'View', 'Create', 'Update', 'Delete', 'Confirmar', 'Anular']),
+            ...$this->permisos('Compra', ['ViewAny', 'View', 'Create', 'Update', 'Delete', 'Restore']),
+            ...$this->permisos('EntradaInventario', ['ViewAny', 'View', 'Create', 'Update', 'Delete', 'Confirmar', 'Anular']),
             ...$this->permisos('AjusteInventario', ['ViewAny', 'View', 'Create', 'Update', 'Delete', 'Aplicar']),
             ...$this->permisos('MovimientoInventario', ['ViewAny', 'View']),
             // Ve el historial de precios; bajar un precio lo decide el administrador.

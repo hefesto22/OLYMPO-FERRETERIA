@@ -47,7 +47,7 @@ class CreateProducto extends CreateRecord
             Notification::make()
                 ->warning()
                 ->title('El producto aún no tiene precio')
-                ->body('Su precio se calcula con el margen en cuanto tenga costo: con la primera compra o un ajuste de existencia inicial.')
+                ->body('Su precio se calcula con el margen en cuanto tenga costo: con la primera entrada de inventario o un ajuste de existencia inicial.')
                 ->persistent()
                 ->send();
         }

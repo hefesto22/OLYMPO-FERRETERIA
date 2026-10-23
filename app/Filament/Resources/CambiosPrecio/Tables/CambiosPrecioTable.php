@@ -104,7 +104,7 @@ class CambiosPrecioTable
             ])
             ->emptyStateIcon(Heroicon::OutlinedCheckCircle)
             ->emptyStateHeading('Nada por revisar')
-            ->emptyStateDescription('Cuando una compra baje el costo de un producto con margen, aparecerá aquí para que decidas si le bajas el precio.');
+            ->emptyStateDescription('Cuando una entrada de inventario baje el costo de un producto con margen, aparecerá aquí para que decidas si le bajas el precio.');
     }
 
     private static function accionBajar(): Action

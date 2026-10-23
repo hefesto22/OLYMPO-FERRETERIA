@@ -340,7 +340,7 @@ class Producto extends Model
     /**
      * Fija precio público y mayoreo con el margen sobre `costo_precio`.
      * Sin costo todavía, el precio queda en 0 (no se puede vender) hasta
-     * la primera compra o existencia inicial.
+     * la primera entrada de inventario o existencia inicial.
      */
     public function calcularPreciosConMargen(): void
     {

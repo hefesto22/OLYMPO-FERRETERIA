@@ -11,8 +11,8 @@ use Filament\Support\Icons\Heroicon;
 /**
  * Cómo se fija el precio de un producto.
  *
- *  - Porcentaje: costo + X % (+ ISV), redondeado al lempira hacia arriba.
- *  - Monto:      costo + L X por unidad base (+ ISV), igual redondeado.
+ *  - Porcentaje: costo con ISV + X %, redondeado al lempira hacia arriba.
+ *  - Monto:      costo con ISV + L X por unidad base, igual redondeado.
  *  - Manual:     el precio se teclea y el sistema no lo toca.
  */
 enum TipoMargen: string implements HasIcon, HasLabel

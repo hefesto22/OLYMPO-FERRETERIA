@@ -30,7 +30,7 @@ class CambioPrecioResource extends Resource
 
     protected static ?string $slug = 'cambios-precio';
 
-    protected static ?int $navigationSort = 7;
+    protected static ?int $navigationSort = 8;
 
     public static function getNavigationGroup(): ?string
     {

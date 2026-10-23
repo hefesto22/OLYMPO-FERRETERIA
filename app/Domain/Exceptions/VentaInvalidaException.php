@@ -28,7 +28,7 @@ final class VentaInvalidaException extends GrupoOlympoException
 
     public static function sinPrecio(string $producto): self
     {
-        return new self("\"{$producto}\" todavía no tiene precio: su precio se calcula con la primera compra o existencia inicial.");
+        return new self("\"{$producto}\" todavía no tiene precio: su precio se calcula con la primera entrada de inventario o existencia inicial.");
     }
 
     public static function presentacionInvalida(string $producto): self

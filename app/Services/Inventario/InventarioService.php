@@ -73,9 +73,9 @@ final class InventarioService
                 'costo_promedio' => $costoNuevo,
             ];
 
-            // El "último costo" solo lo fija una compra real o el inventario inicial;
+            // El "último costo" solo lo fija una entrada de mercadería o el inventario inicial;
             // una devolución o un ajuste no cambian lo que cuesta reponer el producto.
-            if (in_array($tipo, [TipoMovimientoInventario::EntradaCompra, TipoMovimientoInventario::InventarioInicial], true)) {
+            if (in_array($tipo, [TipoMovimientoInventario::Entrada, TipoMovimientoInventario::InventarioInicial], true)) {
                 $cambios['ultimo_costo'] = $costoUnitario;
             }
 
@@ -97,7 +97,7 @@ final class InventarioService
 
     /**
      * @param float|null $costoUnitario costo del movimiento; null = costo promedio actual
-     * @param bool $revertirCosto true al anular una compra: saca su costo del promedio
+     * @param bool $revertirCosto true al anular una entrada: saca su costo del promedio
      */
     public function registrarSalida(
         Producto $producto,

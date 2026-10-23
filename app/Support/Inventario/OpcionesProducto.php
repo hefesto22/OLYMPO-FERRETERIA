@@ -8,7 +8,7 @@ use App\Models\Producto;
 use App\Models\ProductoPresentacion;
 
 /**
- * Datos de productos que necesitan los formularios de compras, ajustes
+ * Datos de productos que necesitan los formularios de entradas, ajustes
  * y (en la fase de ventas) el punto de venta: etiquetas, presentaciones,
  * factores de conversión y costos sugeridos.
  *
@@ -98,8 +98,8 @@ final class OpcionesProducto
     }
 
     /**
-     * Costo sugerido para una compra, sin ISV: el último costo (o el
-     * promedio si nunca se ha comprado) multiplicado por el factor.
+     * Costo sugerido para una entrada, sin ISV: el último costo (o el
+     * promedio si nunca ha entrado) multiplicado por el factor.
      */
     public static function costoSugerido(mixed $productoId, mixed $presentacionId): float
     {
@@ -114,6 +114,15 @@ final class OpcionesProducto
             : (float) $producto->costo_promedio;
 
         return round($costoBase * self::factor($productoId, $presentacionId), 4);
+    }
+
+    /**
+     * Tasa del ISV del producto (0.15, 0.18 o 0 si es exento). Null si no
+     * hay producto.
+     */
+    public static function tasaIsv(mixed $productoId): ?float
+    {
+        return self::producto($productoId)?->tipo_isv->tasa();
     }
 
     public static function existencia(mixed $productoId): ?float

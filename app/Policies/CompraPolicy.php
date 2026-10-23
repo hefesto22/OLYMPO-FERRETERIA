@@ -65,20 +65,4 @@ class CompraPolicy
     {
         return $authUser->can('Reorder:Compra');
     }
-
-    /**
-     * Confirmar la compra: suma la mercadería al inventario.
-     */
-    public function confirmar(AuthUser $authUser): bool
-    {
-        return $authUser->can('Confirmar:Compra');
-    }
-
-    /**
-     * Anular una compra confirmada: revierte su entrada al inventario.
-     */
-    public function anular(AuthUser $authUser): bool
-    {
-        return $authUser->can('Anular:Compra');
-    }
 }

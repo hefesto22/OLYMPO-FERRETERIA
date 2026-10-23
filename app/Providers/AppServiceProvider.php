@@ -6,7 +6,7 @@ namespace App\Providers;
 
 use App\Listeners\RecordUserLogin;
 use App\Models\AjusteInventario;
-use App\Models\Compra;
+use App\Models\EntradaInventario;
 use App\Models\Venta;
 use Carbon\Carbon;
 use Carbon\CarbonImmutable;
@@ -59,9 +59,9 @@ class AppServiceProvider extends ServiceProvider
         // Alias estables para los documentos que mueven inventario (columna
         // documento_type del kardex): la base no depende del nombre de la clase.
         Relation::morphMap([
-            'compra'            => Compra::class,
-            'ajuste_inventario' => AjusteInventario::class,
-            'venta'             => Venta::class,
+            'entrada_inventario' => EntradaInventario::class,
+            'ajuste_inventario'  => AjusteInventario::class,
+            'venta'              => Venta::class,
         ]);
     }
 }

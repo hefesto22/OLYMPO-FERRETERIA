@@ -10,13 +10,13 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Carbon;
 
 /**
- * Línea de una compra. El formulario solo captura producto, presentación,
- * cantidad y costo; el resto (factor, cantidad en unidad base, ISV,
- * totales) se calcula aquí al guardar, para que ninguna pantalla pueda
- * dejar importes inconsistentes.
+ * Línea de una entrada de inventario. El formulario solo captura
+ * producto, presentación, cantidad y costo neto (sin ISV); el resto
+ * (factor, cantidad en unidad base, ISV, totales) se calcula aquí al
+ * guardar, para que ninguna pantalla pueda dejar importes inconsistentes.
  *
  * @property int $id
- * @property int $compra_id
+ * @property int $entrada_inventario_id
  * @property int $producto_id
  * @property int|null $producto_presentacion_id
  * @property string $cantidad
@@ -30,17 +30,17 @@ use Illuminate\Support\Carbon;
  * @property string $total
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- * @property-read Compra $compra
+ * @property-read EntradaInventario $entrada
  * @property-read Producto $producto
  * @property-read ProductoPresentacion|null $presentacion
  */
-class CompraDetalle extends Model
+class EntradaInventarioDetalle extends Model
 {
-    protected $table = 'compra_detalles';
+    protected $table = 'entrada_inventario_detalles';
 
     /** @var list<string> */
     protected $fillable = [
-        'compra_id',
+        'entrada_inventario_id',
         'producto_id',
         'producto_presentacion_id',
         'cantidad',
@@ -67,17 +67,17 @@ class CompraDetalle extends Model
 
     protected static function booted(): void
     {
-        static::saving(static function (CompraDetalle $detalle): void {
+        static::saving(static function (EntradaInventarioDetalle $detalle): void {
             $detalle->calcularImportes();
         });
     }
 
     /**
-     * @return BelongsTo<Compra, $this>
+     * @return BelongsTo<EntradaInventario, $this>
      */
-    public function compra(): BelongsTo
+    public function entrada(): BelongsTo
     {
-        return $this->belongsTo(Compra::class, 'compra_id');
+        return $this->belongsTo(EntradaInventario::class, 'entrada_inventario_id');
     }
 
     /**

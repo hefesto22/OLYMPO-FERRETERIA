@@ -10,7 +10,7 @@ use Filament\Support\Contracts\HasLabel;
 use Filament\Support\Icons\Heroicon;
 
 /**
- * Ciclo de vida de compras y ajustes de inventario.
+ * Ciclo de vida de entradas y ajustes de inventario.
  *
  * Borrador: se puede editar o borrar; no toca el inventario.
  * Confirmado: ya movió el inventario; no se edita.

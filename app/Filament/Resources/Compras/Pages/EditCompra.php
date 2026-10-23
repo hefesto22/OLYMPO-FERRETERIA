@@ -6,9 +6,8 @@ namespace App\Filament\Resources\Compras\Pages;
 
 use App\Filament\Resources\Compras\CompraResource;
 use App\Models\Compra;
-use App\Services\Inventario\CompraService;
 use Filament\Actions\DeleteAction;
-use Filament\Actions\ViewAction;
+use Filament\Actions\RestoreAction;
 use Filament\Resources\Pages\EditRecord;
 
 class EditCompra extends EditRecord
@@ -18,8 +17,8 @@ class EditCompra extends EditRecord
     protected function getHeaderActions(): array
     {
         return [
-            ViewAction::make(),
             DeleteAction::make(),
+            RestoreAction::make(),
         ];
     }
 
@@ -28,11 +27,11 @@ class EditCompra extends EditRecord
         /** @var Compra $compra */
         $compra = $this->getRecord();
 
-        app(CompraService::class)->recalcularTotales($compra);
+        $compra->guardarRtnEnProveedor();
     }
 
     protected function getRedirectUrl(): string
     {
-        return CompraResource::getUrl('view', ['record' => $this->getRecord()]);
+        return CompraResource::getUrl('index');
     }
 }

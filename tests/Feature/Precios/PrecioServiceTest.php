@@ -5,30 +5,30 @@ declare(strict_types=1);
 use App\Enums\EstadoCambioPrecio;
 use App\Enums\TipoMargen;
 use App\Models\CambioPrecio;
-use App\Models\Compra;
+use App\Models\EntradaInventario;
 use App\Models\Producto;
 use App\Models\User;
-use App\Services\Inventario\CompraService;
+use App\Services\Inventario\EntradaInventarioService;
 use App\Services\Precios\PrecioService;
 use BezhanSalleh\FilamentShield\Support\Utils as ShieldUtils;
 use Spatie\Permission\Models\Role;
 
 function comprarAlCosto(Producto $producto, float $cantidad, float $costo): void
 {
-    /** @var Compra $compra */
-    $compra = Compra::factory()->create();
+    /** @var EntradaInventario $entrada */
+    $entrada = EntradaInventario::factory()->create();
 
-    $compra->detalles()->create([
+    $entrada->detalles()->create([
         'producto_id'    => $producto->id,
         'cantidad'       => $cantidad,
         'costo_unitario' => $costo,
     ]);
 
-    app(CompraService::class)->confirmar($compra);
+    app(EntradaInventarioService::class)->confirmar($entrada);
 }
 
 /**
- * Producto con margen y su primera compra de 10 unidades al costo dado.
+ * Producto con margen y su primera entrada de 10 unidades al costo dado.
  */
 function productoConMargen(float $costo, float $margenPublico = 30, ?float $margenMayoreo = 20, TipoMargen $tipo = TipoMargen::Porcentaje): Producto
 {
@@ -62,12 +62,12 @@ it('fija el precio con el margen al registrar el primer costo', function (): voi
         ->and(CambioPrecio::query()->count())->toBe(0);
 });
 
-it('suma un margen en lempiras por unidad base', function (): void {
+it('suma un margen en lempiras sobre lo que te sale con ISV', function (): void {
     $producto = productoConMargen(18.80, 5, 3, TipoMargen::Monto);
 
-    // (18.80 + 5) × 1.15 = 27.37 → L 28; (18.80 + 3) × 1.15 = 25.07 → L 26.
-    expect((float) $producto->precio_venta)->toBe(28.0)
-        ->and((float) $producto->precio_mayoreo)->toBe(26.0);
+    // Te sale en 18.80 × 1.15 = 21.62; + L 5 = 26.62 → L 27; + L 3 = 24.62 → L 25.
+    expect((float) $producto->precio_venta)->toBe(27.0)
+        ->and((float) $producto->precio_mayoreo)->toBe(25.0);
 });
 
 it('sube el precio solo cuando sube el costo', function (): void {
@@ -85,7 +85,7 @@ it('sube el precio solo cuando sube el costo', function (): void {
         ->and($cambio->estado)->toBe(EstadoCambioPrecio::Automatico)
         ->and((float) $cambio->precio_anterior)->toBe(29.0)
         ->and((float) $cambio->precio_nuevo)->toBe(31.0)
-        ->and($cambio->origen)->toStartWith('Compra')
+        ->and($cambio->origen)->toStartWith('Entrada E-')
         ->and($dueno->notifications()->count())->toBe(0);
 });
 
@@ -165,19 +165,19 @@ it('si el costo vuelve a subir, la baja que esperaba revisión queda sin efecto'
         ->and(CambioPrecio::query()->pendientes()->count())->toBe(0);
 });
 
-it('si se anula la compra que bajó el costo, la baja que esperaba revisión queda sin efecto', function (): void {
+it('si se anula la entrada que bajó el costo, la baja que esperaba revisión queda sin efecto', function (): void {
     duenoDeLaFerreteria();
     $producto = productoConMargen(18.80);
 
-    /** @var Compra $compra */
-    $compra = Compra::factory()->create();
-    $compra->detalles()->create(['producto_id' => $producto->id, 'cantidad' => 10, 'costo_unitario' => 15.00]);
-    app(CompraService::class)->confirmar($compra);
+    /** @var EntradaInventario $entrada */
+    $entrada = EntradaInventario::factory()->create();
+    $entrada->detalles()->create(['producto_id' => $producto->id, 'cantidad' => 10, 'costo_unitario' => 15.00]);
+    app(EntradaInventarioService::class)->confirmar($entrada);
 
     expect(CambioPrecio::query()->pendientes()->count())->toBe(1);
 
     // Al anular, el promedio regresa a 18.80: ya no hay nada que bajar.
-    app(CompraService::class)->anular($compra->refresh(), 'Error de captura');
+    app(EntradaInventarioService::class)->anular($entrada->refresh(), 'Error de captura');
 
     expect(CambioPrecio::query()->pendientes()->count())->toBe(0)
         ->and(CambioPrecio::query()->sole()->estado)->toBe(EstadoCambioPrecio::Descartado)

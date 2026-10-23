@@ -749,6 +749,15 @@
         font-weight: 700;
     }
 
+    /* "Te sale en": costo con ISV, sobre el que se saca el margen. */
+    .ol-precio__pasos .es-subtotal dt {
+        color: inherit;
+    }
+
+    .ol-precio__pasos .es-subtotal dd {
+        font-weight: 600;
+    }
+
     .ol-precio__datos {
         padding-top: 1rem;
         border-top: 1px solid var(--ol-borde);

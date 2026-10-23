@@ -110,6 +110,6 @@ it('con margen en lempiras el margen propio es por presentación', function (): 
 
     $caja = (new ProductoPresentacion)->forceFill(['factor' => 50, 'precio_venta' => null, 'margen' => 150]);
 
-    // (940 + 150) × 1.15 = 1253.50 → L 1254.
-    expect(PrecioProducto::unitario($clavo, $caja, ListaPrecio::Publico))->toBe(1254.0);
+    // 940 con ISV = 1,081; + L 150 de la caja = 1,231.
+    expect(PrecioProducto::unitario($clavo, $caja, ListaPrecio::Publico))->toBe(1231.0);
 });

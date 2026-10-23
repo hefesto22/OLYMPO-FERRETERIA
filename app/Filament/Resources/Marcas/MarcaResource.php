@@ -26,7 +26,7 @@ class MarcaResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Marcas';
 
-    protected static ?int $navigationSort = 3;
+    protected static ?int $navigationSort = 4;
 
     public static function getNavigationGroup(): ?string
     {

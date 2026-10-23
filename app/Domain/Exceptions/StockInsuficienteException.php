@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace App\Domain\Exceptions;
 
 /**
- * Una salida (venta, ajuste, anulación de compra) pide más de lo que hay.
+ * Una salida (venta, ajuste, anulación de entrada) pide más de lo que hay.
  */
 final class StockInsuficienteException extends GrupoOlympoException
 {

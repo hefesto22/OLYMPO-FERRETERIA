@@ -26,7 +26,7 @@ class UnidadMedidaResource extends Resource
 
     protected static ?string $pluralModelLabel = 'Unidades de medida';
 
-    protected static ?int $navigationSort = 4;
+    protected static ?int $navigationSort = 5;
 
     public static function getNavigationGroup(): ?string
     {

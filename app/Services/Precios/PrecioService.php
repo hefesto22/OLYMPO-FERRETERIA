@@ -38,7 +38,7 @@ final class PrecioService
 
     /**
      * Revisa los productos cuyo costo pudo cambiar. Se llama dentro de la
-     * misma transacción que movió el costo (compra, ajuste, anulación),
+     * misma transacción que movió el costo (entrada, ajuste, anulación),
      * así que si esa operación falla, tampoco queda ningún cambio de precio.
      *
      * @param array<int, int> $productoIds
@@ -122,14 +122,14 @@ final class PrecioService
         $costoPrecio = round((float) $producto->costo_precio, 4);
 
         // El costo volvió a donde estaban calculados los precios (p. ej. se
-        // anuló la compra que lo bajó): lo que esperaba revisión ya no aplica.
+        // anuló la entrada que lo bajó): lo que esperaba revisión ya no aplica.
         if (abs($costoActual - $costoPrecio) < self::EPSILON) {
             $this->descartarPendiente($producto);
 
             return false;
         }
 
-        // Primer costo del producto (existencia inicial o primera compra):
+        // Primer costo del producto (existencia inicial o primera entrada):
         // los precios se fijan sin preguntar.
         if ($costoPrecio <= 0) {
             $producto->forceFill(['costo_precio' => $costoActual])->save();

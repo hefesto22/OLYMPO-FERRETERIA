@@ -1,7 +1,8 @@
 {{--
     Tarjeta del formulario de producto: el precio que va a quedar y de dónde
-    sale (costo ponderado + margen + ISV, al lempira hacia arriba), la
-    ganancia y lo que hay en existencia. Datos de ProductoForm::resumenPrecio().
+    sale (costo ponderado + ISV = lo que te sale, + margen, al lempira hacia
+    arriba), la ganancia y lo que hay en existencia. Datos de
+    ProductoForm::resumenPrecio().
 --}}
 @php
     $unidad = $resumen['unidad'] !== '' ? $resumen['unidad'] : 'unidad';
@@ -15,7 +16,7 @@
         @if ($resumen['sin_costo'])
             <p class="ol-precio__sin-costo">Sin costo todavía</p>
             <p class="ol-precio__nota">
-                {{ $resumen['creando'] ? 'Escribe el costo inicial abajo, en Inventario, para ver el precio.' : 'El precio sale con la primera compra o la existencia inicial.' }}
+                {{ $resumen['creando'] ? 'Escribe el costo inicial abajo, en Inventario, para ver el precio.' : 'El precio sale con la primera entrada de inventario o la existencia inicial.' }}
             </p>
         @elseif ($resumen['precio'] === null)
             <p class="ol-precio__sin-costo">Escribe el precio</p>
@@ -33,16 +34,20 @@
                 <dt>{{ $resumen['pendiente'] !== null ? 'Costo de los precios vigentes' : $etiquetaCosto }}</dt>
                 <dd>{{ costoLempiras($resumen['costo']) }}</dd>
             </div>
-            <div>
-                <dt>Margen de {{ $resumen['margen_texto'] }}</dt>
-                <dd>+ {{ lempiras($resumen['margen']) }}</dd>
-            </div>
             @if ($resumen['isv'] > 0)
                 <div>
                     <dt>{{ $resumen['isv_texto'] }}</dt>
                     <dd>+ {{ lempiras($resumen['isv']) }}</dd>
                 </div>
+                <div class="es-subtotal">
+                    <dt>Te sale en</dt>
+                    <dd>{{ lempiras($resumen['con_isv']) }}</dd>
+                </div>
             @endif
+            <div>
+                <dt>Margen de {{ $resumen['margen_texto'] }}</dt>
+                <dd>+ {{ lempiras($resumen['margen']) }}</dd>
+            </div>
             <div class="es-total">
                 <dt>Al lempira hacia arriba</dt>
                 <dd>{{ lempiras((float) $resumen['precio']) }}</dd>
@@ -78,7 +83,7 @@
 
         @if ($resumen['ultimo_costo'] !== null)
             <div>
-                <dt>Último costo de compra</dt>
+                <dt>Último costo de entrada</dt>
                 <dd>{{ costoLempiras($resumen['ultimo_costo']) }}</dd>
             </div>
         @endif

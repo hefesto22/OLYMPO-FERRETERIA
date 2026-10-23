@@ -15,16 +15,17 @@ declare(strict_types=1);
 return [
 
     'inventario' => [
-        // Si es false, ninguna salida (venta, ajuste, anulación de compra)
+        // Si es false, ninguna salida (venta, ajuste, anulación de entrada)
         // puede dejar una existencia en negativo: se lanza
         // StockInsuficienteException y la operación completa se revierte.
         'permitir_stock_negativo' => (bool) env('FERRETERIA_PERMITIR_STOCK_NEGATIVO', false),
     ],
 
     'documentos' => [
-        // Prefijos de la numeración interna: P-000123, C-000045, AJ-000007.
+        // Prefijos de la numeración interna: P-000123, C-000045, E-000012, AJ-000007.
         'prefijo_producto' => 'P',
         'prefijo_compra'   => 'C',
+        'prefijo_entrada'  => 'E',
         'prefijo_ajuste'   => 'AJ',
         'digitos'          => 6,
     ],
