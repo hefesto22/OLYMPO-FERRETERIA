@@ -147,26 +147,30 @@ return new class extends Migration
 
     /**
      * Numeración de las entradas (C-000001 ↔ E-000001) y los textos del
-     * kardex y del historial de precios que la mencionan.
+     * kardex y del historial de precios que la mencionan ("Compra C-000001"
+     * ↔ "Entrada E-000001"). Los textos van como parámetros, no pegados al SQL.
      *
-     * @param array<string, string> $textos
+     * @param array<string, string> $textos dos reemplazos: [de => a, de => a]
      */
     private function renumerar(string $letraDe, string $letraA, array $textos): void
     {
-        DB::table('entradas_inventario')
-            ->where('numero', 'like', $letraDe.'-%')
-            ->update(['numero' => DB::raw("'{$letraA}' || substr(numero, 2)")]);
+        DB::update(
+            'UPDATE entradas_inventario SET numero = ? || substr(numero, 2) WHERE numero LIKE ?',
+            [$letraA, $letraDe.'-%'],
+        );
+
+        $reemplazos = [];
+
+        foreach ($textos as $texto => $reemplazo) {
+            $reemplazos[] = $texto;
+            $reemplazos[] = $reemplazo;
+        }
 
         foreach (['movimientos_inventario' => 'descripcion', 'cambios_precio' => 'origen'] as $tabla => $columna) {
-            $expresion = $columna;
-
-            foreach ($textos as $texto => $reemplazo) {
-                $expresion = "REPLACE({$expresion}, '{$texto}', '{$reemplazo}')";
-            }
-
-            DB::table($tabla)
-                ->where($columna, 'like', '%'.$letraDe.'-%')
-                ->update([$columna => DB::raw($expresion)]);
+            DB::update(
+                sprintf('UPDATE %1$s SET %2$s = REPLACE(REPLACE(%2$s, ?, ?), ?, ?) WHERE %2$s LIKE ?', $tabla, $columna),
+                [...$reemplazos, '%'.$letraDe.'-%'],
+            );
         }
     }
 
@@ -212,7 +216,8 @@ return new class extends Migration
             (string) config('permission.table_names.role_has_permissions', 'role_has_permissions'),
             (string) config('permission.table_names.model_has_permissions', 'model_has_permissions'),
         ];
-        $llave = (string) config('permission.column_names.permission_pivot_key', 'permission_id');
+        // Spatie trae esta llave en null cuando se usa el nombre de siempre.
+        $llave = (string) (config('permission.column_names.permission_pivot_key') ?: 'permission_id');
 
         foreach (DB::table($permisos)->where('name', $origen)->get() as $permiso) {
             $destinoId = DB::table($permisos)
