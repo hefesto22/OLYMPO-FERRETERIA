@@ -483,6 +483,309 @@
         color: var(--ol-tenue);
     }
 
+    /* ── Repetidores: tarjetas y tablas con el mismo borde ────────────── */
+
+    .fi-fo-repeater-item {
+        border-radius: 0.75rem;
+        box-shadow: 0 0 0 1px var(--ol-borde), var(--ol-sombra);
+    }
+
+    .fi-fo-repeater-item-header-label {
+        font-weight: 600;
+    }
+
+    .fi-fo-table-repeater > table {
+        background-color: var(--ol-tarjeta);
+        box-shadow: 0 0 0 1px var(--ol-borde), var(--ol-sombra);
+    }
+
+    .fi-fo-table-repeater > table > thead > tr > th {
+        background-color: var(--ol-fondo);
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--ol-tenue);
+    }
+
+    /* Todas las celdas arriba: si una lleva ayuda debajo, las demás no bajan. */
+    .fi-fo-table-repeater > table > tbody > tr > td {
+        vertical-align: top;
+    }
+
+    /* Los botones de la línea, a la altura de los campos. */
+    .fi-fo-table-repeater .fi-fo-table-repeater-actions {
+        height: 2.25rem;
+    }
+
+    /* Campos fusionados (cantidad + "LB c/u"): un solo borde, como un campo. */
+    .fi-sc-fused-group > .fi-sc {
+        background-color: var(--ol-campo);
+        box-shadow: 0 0 0 1px var(--ol-borde-campo), var(--ol-sombra);
+    }
+
+    .fi-sc-fused-group > .fi-sc:focus-within {
+        box-shadow: 0 0 0 1px var(--primary-500), 0 0 0 4px var(--ol-anillo);
+    }
+
+    .fi-sc-fused-group .fi-sc > :not(:last-child) {
+        border-color: var(--ol-borde-campo);
+    }
+
+    /* ── Compras: cómo queda cada producto al confirmar ───────────────── */
+
+    .ol-proyeccion {
+        display: grid;
+        gap: 0.25rem;
+        min-width: 15rem;
+        font-size: 0.8125rem;
+        line-height: 1.35;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .ol-proyeccion__vacio {
+        color: var(--ol-tenue);
+    }
+
+    .ol-proyeccion__cuenta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        column-gap: 0.375rem;
+        color: var(--ol-tenue);
+    }
+
+    .ol-proyeccion__signo {
+        font-weight: 600;
+    }
+
+    .ol-proyeccion__resultado {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 0.25rem 0.75rem;
+        color: var(--gray-700);
+    }
+
+    .dark .ol-proyeccion__resultado {
+        color: var(--gray-300);
+    }
+
+    .ol-proyeccion__resultado strong {
+        font-weight: 600;
+        color: var(--gray-950);
+    }
+
+    .dark .ol-proyeccion__resultado strong {
+        color: #fff;
+    }
+
+    .ol-proyeccion__estado {
+        display: inline-flex;
+        padding: 0.0625rem 0.5rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 500;
+        background-color: var(--gray-100);
+        color: var(--gray-700);
+    }
+
+    .dark .ol-proyeccion__estado {
+        background-color: color-mix(in oklab, white 8%, transparent);
+        color: var(--gray-300);
+    }
+
+    /* Sube solo: llama la atención. Bajaría: espera la decisión del dueño. */
+    .ol-proyeccion__estado.es-sube {
+        background-color: color-mix(in oklab, var(--warning-500) 16%, transparent);
+        color: var(--warning-800);
+    }
+
+    .ol-proyeccion__estado.es-baja {
+        background-color: color-mix(in oklab, var(--info-500) 14%, transparent);
+        color: var(--info-800);
+    }
+
+    .ol-proyeccion__estado.es-nuevo {
+        background-color: color-mix(in oklab, var(--success-500) 14%, transparent);
+        color: var(--success-800);
+    }
+
+    .dark .ol-proyeccion__estado.es-sube {
+        color: var(--warning-300);
+    }
+
+    .dark .ol-proyeccion__estado.es-baja {
+        color: var(--info-300);
+    }
+
+    .dark .ol-proyeccion__estado.es-nuevo {
+        color: var(--success-300);
+    }
+
+    .ol-totales {
+        display: grid;
+        gap: 0.375rem;
+        width: 100%;
+        max-width: 20rem;
+        margin-left: auto;
+        font-size: 0.875rem;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .ol-totales > div {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .ol-totales dt {
+        color: var(--ol-tenue);
+    }
+
+    .ol-totales dd {
+        font-weight: 500;
+    }
+
+    .ol-totales .es-total {
+        align-items: baseline;
+        margin-top: 0.25rem;
+        padding-top: 0.625rem;
+        border-top: 1px solid var(--ol-borde);
+    }
+
+    .ol-totales .es-total dt {
+        font-weight: 600;
+        color: var(--gray-950);
+    }
+
+    .ol-totales .es-total dd {
+        font-size: 1.25rem;
+        font-weight: 700;
+    }
+
+    .dark .ol-totales .es-total dt {
+        color: #fff;
+    }
+
+    /* ── Producto: el precio que sale y de dónde ──────────────────────── */
+
+    .ol-precio {
+        display: grid;
+        align-content: start;
+        gap: 1rem;
+        padding: 1.25rem;
+        border-radius: 0.75rem;
+        background-color: var(--ol-fondo);
+        box-shadow: inset 0 0 0 1px var(--ol-borde-suave);
+        font-variant-numeric: tabular-nums;
+    }
+
+    .ol-precio__etiqueta {
+        font-size: 0.8125rem;
+        font-weight: 500;
+        color: var(--ol-tenue);
+    }
+
+    .ol-precio__monto {
+        margin-top: 0.125rem;
+        font-size: 2.25rem;
+        font-weight: 700;
+        line-height: 1.1;
+        letter-spacing: -0.02em;
+        color: var(--gray-950);
+    }
+
+    .dark .ol-precio__monto {
+        color: #fff;
+    }
+
+    .ol-precio__sin-costo {
+        margin-top: 0.25rem;
+        font-size: 1.25rem;
+        font-weight: 600;
+    }
+
+    .ol-precio__nota {
+        margin-top: 0.25rem;
+        font-size: 0.8125rem;
+        color: var(--ol-tenue);
+    }
+
+    .ol-precio__pasos,
+    .ol-precio__datos {
+        display: grid;
+        gap: 0.375rem;
+        font-size: 0.875rem;
+    }
+
+    .ol-precio__pasos > div,
+    .ol-precio__datos > div {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 1rem;
+    }
+
+    .ol-precio__pasos dt,
+    .ol-precio__datos dt {
+        color: var(--ol-tenue);
+    }
+
+    .ol-precio__pasos dd,
+    .ol-precio__datos dd {
+        font-weight: 500;
+        text-align: right;
+    }
+
+    .ol-precio__pasos .es-total {
+        padding-top: 0.5rem;
+        border-top: 1px dashed var(--ol-borde);
+    }
+
+    .ol-precio__pasos .es-total dt {
+        color: inherit;
+    }
+
+    .ol-precio__pasos .es-total dd {
+        font-weight: 700;
+    }
+
+    .ol-precio__datos {
+        padding-top: 1rem;
+        border-top: 1px solid var(--ol-borde);
+    }
+
+    .ol-precio__datos:not(:has(div)) {
+        display: none;
+    }
+
+    .ol-precio__datos .es-positiva {
+        color: var(--success-700);
+    }
+
+    .ol-precio__datos .es-negativa {
+        color: var(--danger-600);
+    }
+
+    .dark .ol-precio__datos .es-positiva {
+        color: var(--success-400);
+    }
+
+    .dark .ol-precio__datos .es-negativa {
+        color: var(--danger-400);
+    }
+
+    .ol-precio__aviso {
+        padding: 0.625rem 0.75rem;
+        border-radius: 0.5rem;
+        font-size: 0.8125rem;
+        background-color: color-mix(in oklab, var(--info-500) 10%, transparent);
+        color: var(--info-800);
+    }
+
+    .dark .ol-precio__aviso {
+        color: var(--info-300);
+    }
+
     /* ── Entrada (login) ──────────────────────────────────────────────── */
 
     .fi-simple-main {

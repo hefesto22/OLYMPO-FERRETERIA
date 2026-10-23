@@ -200,6 +200,7 @@ class PuntoDeVenta extends Page
                     ->searchable()
                     ->getSearchResultsUsing(fn (string $search): array => self::buscarClientes($search))
                     ->getOptionLabelUsing(fn (mixed $value): ?string => is_numeric($value) ? Cliente::query()->find((int) $value)?->etiqueta() : null)
+                    ->createOptionModalHeading('Nuevo cliente')
                     ->createOptionForm([
                         TextInput::make('nombre')
                             ->label('Nombre o razón social')

@@ -36,6 +36,24 @@ if (! function_exists('lempiras')) {
     }
 }
 
+if (! function_exists('costoLempiras')) {
+    /**
+     * Costo unitario en lempiras: 2 decimales, o 4 cuando los necesita
+     * (los costos se guardan a 4 decimales y un clavo suelto cuesta centavos).
+     *
+     *   costoLempiras(22.5)    => "L. 22.50"
+     *   costoLempiras(22.9286) => "L. 22.9286"
+     *   costoLempiras(0.375)   => "L. 0.3750"
+     */
+    function costoLempiras(float|int $costo): string
+    {
+        $valor = (float) $costo;
+        $necesitaCuatro = abs(round($valor, 2) - round($valor, 4)) > 0.00001 || ($valor > 0 && $valor < 1);
+
+        return lempiras($valor, $necesitaCuatro ? 4 : 2);
+    }
+}
+
 if (! function_exists('moneda')) {
     /**
      * Formatea con cualquier símbolo monetario.

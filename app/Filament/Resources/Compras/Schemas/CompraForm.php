@@ -8,6 +8,7 @@ use App\Filament\Schemas\Components\RTNField;
 use App\Filament\Schemas\Components\TelefonoHondurasField;
 use App\Models\Producto;
 use App\Support\Inventario\OpcionesProducto;
+use App\Support\Inventario\ProyeccionCompra;
 use App\Support\Inventario\TotalesCompra;
 use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
@@ -15,14 +16,15 @@ use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
-use Filament\Infolists\Components\TextEntry;
-use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Component;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Str;
 
 class CompraForm
 {
@@ -41,6 +43,7 @@ class CompraForm
                             ->searchable()
                             ->preload()
                             ->required()
+                            ->createOptionModalHeading('Nuevo proveedor')
                             ->createOptionForm([
                                 TextInput::make('nombre')
                                     ->label('Nombre o razón social')
@@ -66,7 +69,7 @@ class CompraForm
                     ]),
 
                 Section::make('Productos')
-                    ->description('Costos SIN ISV, como vienen en la factura del proveedor. Puedes comprar por caja, rollo o cubeta: el sistema lo convierte a la unidad base.')
+                    ->description('Costos sin ISV, como vienen en la factura del proveedor. Se puede comprar por caja, rollo o cubeta: el sistema lo pasa a la unidad base. "Al confirmar" muestra cómo queda el costo ponderado con lo que ya hay en existencia, y el precio de venta.')
                     ->icon(Heroicon::OutlinedCube)
                     ->columnSpanFull()
                     ->schema([
@@ -74,10 +77,11 @@ class CompraForm
                             ->hiddenLabel()
                             ->relationship()
                             ->table([
-                                TableColumn::make('Producto')->markAsRequired()->width('45%'),
-                                TableColumn::make('Presentación'),
-                                TableColumn::make('Cantidad')->markAsRequired(),
-                                TableColumn::make('Costo unitario sin ISV')->markAsRequired(),
+                                TableColumn::make('Producto')->markAsRequired()->width('30%'),
+                                TableColumn::make('Presentación')->width('15%'),
+                                TableColumn::make('Cantidad')->markAsRequired()->width('9%'),
+                                TableColumn::make('Costo sin ISV')->markAsRequired()->width('13%'),
+                                TableColumn::make('Al confirmar'),
                             ])
                             ->schema(self::camposLinea())
                             ->minItems(1)
@@ -86,32 +90,24 @@ class CompraForm
                             ->addActionLabel('Agregar producto')
                             ->live(),
 
-                        Grid::make(3)
-                            ->schema([
-                                TextEntry::make('resumen_subtotal')
-                                    ->label('Subtotal (sin ISV)')
-                                    ->state(fn (Get $get): string => lempiras(self::totales($get)['subtotal'])),
-                                TextEntry::make('resumen_isv')
-                                    ->label('ISV')
-                                    ->state(fn (Get $get): string => lempiras(self::totales($get)['isv'])),
-                                TextEntry::make('resumen_total')
-                                    ->label('Total')
-                                    ->state(fn (Get $get): string => lempiras(self::totales($get)['total']))
-                                    ->weight('bold'),
-                            ]),
+                        View::make('filament.compras.totales')
+                            ->viewData(fn (Get $get): array => ['totales' => self::totales($get)]),
                     ]),
             ]);
     }
 
     /**
-     * Campos de una línea de la compra.
+     * Campos de una línea de la compra y, al final, cómo queda el producto
+     * si se confirma (costo ponderado y precio de venta).
      *
-     * @return array<int, Select|TextInput>
+     * @return array<int, Select|TextInput|View>
      */
     private static function camposLinea(): array
     {
         return [
+            // Las etiquetas se ven en el teléfono, donde cada línea va apilada.
             Select::make('producto_id')
+                ->label('Producto')
                 ->relationship('producto', 'nombre', fn (Builder $query): Builder => $query
                     ->where('activo', true)
                     ->with('unidadMedida'))
@@ -124,6 +120,7 @@ class CompraForm
                     $set('costo_unitario', OpcionesProducto::costoSugerido($state, null));
                 }),
             Select::make('producto_presentacion_id')
+                ->label('Presentación')
                 ->options(fn (Get $get): array => OpcionesProducto::presentaciones($get('producto_id')))
                 ->placeholder(fn (Get $get): string => OpcionesProducto::etiquetaUnidadBase($get('producto_id')))
                 ->live()
@@ -131,6 +128,7 @@ class CompraForm
                     $set('costo_unitario', OpcionesProducto::costoSugerido($get('producto_id'), $state));
                 }),
             TextInput::make('cantidad')
+                ->label('Cantidad')
                 ->numeric()
                 ->required()
                 ->minValue(0.001)
@@ -139,13 +137,35 @@ class CompraForm
                 ->validationMessages(['integer' => 'Esta unidad no se vende en fracciones.'])
                 ->live(onBlur: true),
             TextInput::make('costo_unitario')
+                ->label('Costo sin ISV')
                 ->numeric()
                 ->required()
                 ->minValue(0)
                 ->step(0.0001)
                 ->prefix((string) config('honduras.moneda.simbolo', 'L.'))
                 ->live(onBlur: true),
+            View::make('filament.compras.proyeccion-linea')
+                ->viewData(fn (Get $get, Component $component): array => [
+                    'linea' => ProyeccionCompra::desdeFormulario(self::lineas($get('../../detalles')))[self::claveLinea($component)] ?? null,
+                ]),
         ];
+    }
+
+    /**
+     * @return array<array-key, mixed>|null
+     */
+    private static function lineas(mixed $estado): ?array
+    {
+        return is_array($estado) ? $estado : null;
+    }
+
+    /**
+     * Clave de la línea en el repeater ("record-12" o un uuid): el último
+     * tramo de la ruta del estado de su fila.
+     */
+    private static function claveLinea(Component $component): string
+    {
+        return Str::afterLast((string) $component->getContainer()->getStatePath(), '.');
     }
 
     /**
