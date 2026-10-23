@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 use App\Enums\CategoriaGasto;
 use App\Enums\TipoDocumentoCompra;
-use App\Filament\Resources\Compras\Pages\CreateCompra;
-use App\Filament\Resources\Compras\Pages\ListCompras;
+use App\Filament\Resources\Compras\Pages\ManageCompras;
 use App\Filament\Resources\Compras\Widgets\ResumenComprasMes;
 use App\Models\Compra;
 use App\Models\MovimientoInventario;
 use App\Models\Proveedor;
 use App\Models\User;
+use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 use Livewire\Livewire;
 use Spatie\Permission\Models\Permission;
@@ -90,23 +90,24 @@ it('le guarda el RTN al proveedor que no lo tenía, sin cambiar uno que ya tiene
         ->and($conRtn->refresh()->rtn)->toBe('08019999000011');
 });
 
-it('registra una factura: trae el RTN del proveedor, calcula el ISV y suma el total', function (): void {
+it('registra una factura en el modal: trae el RTN del proveedor, calcula el ISV y suma el total', function (): void {
     test()->actingAs(usuarioDeCompras());
     $proveedor = Proveedor::factory()->create(['rtn' => '08011999123456']);
 
-    Livewire::test(CreateCompra::class)
+    Livewire::test(ManageCompras::class)
+        ->mountAction(CreateAction::class)
         ->fillForm([
             'tipo_documento' => TipoDocumentoCompra::Factura->value,
             'fecha'          => now()->toDateString(),
             'numero_factura' => '000-001-01-00001234',
             'categoria'      => CategoriaGasto::Mercaderia->value,
         ])
-        ->set('data.proveedor_id', $proveedor->id)
-        ->assertSet('data.rtn_proveedor', '08011999123456')
-        ->set('data.gravado_15', '1000')
-        ->assertSet('data.isv_15', 150.0)
-        ->assertSee('L. 1,150.00')
-        ->call('create')
+        ->set('mountedActions.0.data.proveedor_id', $proveedor->id)
+        ->assertSet('mountedActions.0.data.rtn_proveedor', '08011999123456')
+        ->set('mountedActions.0.data.gravado_15', '1000')
+        ->assertSet('mountedActions.0.data.isv_15', 150.0)
+        ->assertMountedActionModalSee('L. 1,150.00')
+        ->callMountedAction()
         ->assertHasNoFormErrors();
 
     $compra = Compra::query()->sole();
@@ -124,14 +125,13 @@ it('registra un recibo solo con lo pagado, sin pedir proveedor ni número', func
     // Otro recibo sin número ni proveedor no cuenta como repetido.
     Compra::factory()->recibo(80)->create(['proveedor_id' => null]);
 
-    Livewire::test(CreateCompra::class)
-        ->fillForm([
+    Livewire::test(ManageCompras::class)
+        ->callAction(CreateAction::class, data: [
             'tipo_documento' => TipoDocumentoCompra::Recibo->value,
             'fecha'          => now()->toDateString(),
             'categoria'      => CategoriaGasto::Transporte->value,
             'exento'         => 350,
         ])
-        ->call('create')
         ->assertHasNoFormErrors();
 
     /** @var Compra $compra */
@@ -147,8 +147,8 @@ it('no deja registrar dos veces la misma factura del mismo proveedor', function 
     test()->actingAs(usuarioDeCompras());
     $existente = Compra::factory()->create(['numero_factura' => '000-001-01-00000077']);
 
-    Livewire::test(CreateCompra::class)
-        ->fillForm([
+    Livewire::test(ManageCompras::class)
+        ->callAction(CreateAction::class, data: [
             'tipo_documento' => TipoDocumentoCompra::Factura->value,
             'fecha'          => now()->toDateString(),
             'numero_factura' => '000-001-01-00000077',
@@ -157,7 +157,6 @@ it('no deja registrar dos veces la misma factura del mismo proveedor', function 
             'gravado_15'     => 100,
             'isv_15'         => 15,
         ])
-        ->call('create')
         ->assertHasFormErrors(['numero_factura']);
 
     expect(Compra::query()->count())->toBe(1);
@@ -176,7 +175,7 @@ it('muestra el total del mes, el ISV que se descuenta y las facturas sin RTN', f
         ->assertSee('L. 150.00')
         ->assertSee('Su ISV no se puede descontar');
 
-    Livewire::test(ListCompras::class)
+    Livewire::test(ManageCompras::class)
         ->assertCanSeeTableRecords(Compra::all())
         ->assertSee('Sin RTN: su ISV no se descuenta');
 });

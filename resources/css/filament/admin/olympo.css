@@ -666,6 +666,20 @@
         color: #fff;
     }
 
+    /* Compras: aviso de que el ISV no se descuenta sin el RTN del proveedor. */
+    .ol-totales__nota {
+        max-width: 20rem;
+        margin: 0.5rem 0 0 auto;
+        font-size: 0.8125rem;
+        line-height: 1.4;
+        text-align: right;
+        color: var(--warning-700);
+    }
+
+    .dark .ol-totales__nota {
+        color: var(--warning-400);
+    }
+
     /* ── Producto: el precio que sale y de dónde ──────────────────────── */
 
     .ol-precio {

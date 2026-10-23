@@ -11,6 +11,7 @@ use Filament\Actions\DeleteAction;
 use Filament\Actions\EditAction;
 use Filament\Actions\RestoreAction;
 use Filament\Forms\Components\DatePicker;
+use Filament\Support\Enums\Width;
 use Filament\Tables\Columns\Summarizers\Sum;
 use Filament\Tables\Columns\TextColumn;
 use Filament\Tables\Filters\Filter;
@@ -91,7 +92,12 @@ class ComprasTable
                     ->label('Borradas'),
             ])
             ->recordActions([
-                EditAction::make(),
+                EditAction::make()
+                    ->modalHeading(fn (Compra $record): string => $record->tipo_documento->getLabel().' '.($record->numero_factura ?? $record->numero))
+                    ->modalWidth(Width::FourExtraLarge)
+                    ->after(function (Compra $record): void {
+                        $record->guardarRtnEnProveedor();
+                    }),
                 DeleteAction::make(),
                 RestoreAction::make(),
             ])

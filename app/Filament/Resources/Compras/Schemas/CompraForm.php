@@ -18,20 +18,21 @@ use Filament\Forms\Components\Select;
 use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Forms\Components\ToggleButtons;
-use Filament\Infolists\Components\TextEntry;
-use Filament\Schemas\Components\Section;
+use Filament\Schemas\Components\Fieldset;
+use Filament\Schemas\Components\Grid;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
+use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
-use Filament\Support\Enums\FontWeight;
 use Filament\Support\Enums\TextSize;
-use Filament\Support\Icons\Heroicon;
 use Illuminate\Database\Eloquent\Builder;
 
 /**
- * Registrar una compra como viene en el papel del proveedor: qué dio
- * (factura o recibo), de quién y por cuánto. El ISV de cada gravado se
- * calcula solo y se puede corregir; el total se suma solo.
+ * Registrar una compra como viene en el papel del proveedor, en un
+ * modal: qué dio (factura o recibo), de quién y por cuánto. El ISV de
+ * cada gravado se calcula solo y se puede corregir; el total se suma
+ * solo y se ve a la derecha, como cierra la factura.
  */
 class CompraForm
 {
@@ -40,22 +41,21 @@ class CompraForm
         return $schema
             ->columns(1)
             ->components([
-                Section::make('¿Qué te dio el proveedor?')
-                    ->icon(Heroicon::OutlinedDocumentText)
-                    ->schema([
-                        ToggleButtons::make('tipo_documento')
-                            ->hiddenLabel()
-                            ->options(TipoDocumentoCompra::class)
-                            ->default(TipoDocumentoCompra::Factura)
-                            ->required()
-                            ->inline()
-                            ->live()
-                            ->helperText(fn (Get $get): ?string => self::tipo($get)?->getDescription()),
-                    ]),
+                ToggleButtons::make('tipo_documento')
+                    ->label('¿Qué te dio el proveedor?')
+                    ->options(TipoDocumentoCompra::class)
+                    // Como Recibo/Factura en la caja: la opción elegida va oscura.
+                    ->colors([
+                        TipoDocumentoCompra::Factura->value => 'gray',
+                        TipoDocumentoCompra::Recibo->value  => 'gray',
+                    ])
+                    ->default(TipoDocumentoCompra::Factura)
+                    ->required()
+                    ->inline()
+                    ->live()
+                    ->helperText(fn (Get $get): ?string => self::tipo($get)?->getDescription()),
 
-                Section::make('Proveedor')
-                    ->icon(Heroicon::OutlinedTruck)
-                    ->columns(2)
+                Grid::make(['default' => 1, 'md' => 3])
                     ->schema([
                         DatePicker::make('fecha')
                             ->label('Fecha de compra')
@@ -86,6 +86,7 @@ class CompraForm
                             ->relationship('proveedor', 'nombre', fn (Builder $query): Builder => $query->where('activo', true))
                             ->searchable(['nombre', 'rtn'])
                             ->preload()
+                            ->placeholder(fn (Get $get): string => self::esRecibo($get) ? 'Opcional' : 'Busca o regístralo con +')
                             ->required(fn (Get $get): bool => ! self::esRecibo($get))
                             ->live()
                             ->afterStateUpdated(function (Set $set, mixed $state): void {
@@ -100,26 +101,30 @@ class CompraForm
                                 RTNField::make()
                                     ->unique(table: 'proveedores', column: 'rtn'),
                                 TelefonoHondurasField::make('telefono', 'Teléfono'),
-                            ]),
+                            ])
+                            ->columnSpan(['md' => 2]),
                         RTNField::make('rtn_proveedor')
                             ->label('RTN del proveedor')
                             ->validationAttribute('RTN del proveedor')
-                            ->helperText('Necesario para que el SAR acepte el descuento del ISV. Si el proveedor no lo tenía, se le guarda.')
+                            ->helperText('Lo pide el SAR para descontar el ISV.')
                             ->hidden(fn (Get $get): bool => self::esRecibo($get))
                             ->live(onBlur: true),
                     ]),
 
-                Section::make('Montos')
-                    ->icon(Heroicon::OutlinedBanknotes)
-                    ->columns(2)
+                Fieldset::make(fn (Get $get): string => self::esRecibo($get) ? 'Lo que se pagó' : 'Montos de la factura')
+                    ->columns(['default' => 1, 'sm' => 2, 'lg' => 4])
                     ->schema([
                         self::gravado('gravado_15', 'Gravado 15 %', 'isv_15', TipoIsv::Gravado15),
-                        self::isv('isv_15', 'I.S.V. 15 %'),
+                        self::isv('isv_15', 'ISV 15 %'),
                         self::gravado('gravado_18', 'Gravado 18 %', 'isv_18', TipoIsv::Gravado18),
-                        self::isv('isv_18', 'I.S.V. 18 %'),
+                        self::isv('isv_18', 'ISV 18 %'),
+                        Text::make('El ISV se calcula solo al escribir el gravado. Corrígelo si la factura dice otra cosa.')
+                            ->color('gray')
+                            ->size(TextSize::Small)
+                            ->hidden(fn (Get $get): bool => self::esRecibo($get))
+                            ->columnSpanFull(),
                         MontoField::make('exento')
-                            ->label(fn (Get $get): string => self::esRecibo($get) ? 'Total pagado' : 'Exento')
-                            ->helperText(fn (Get $get): ?string => self::esRecibo($get) ? null : 'Lo que no lleva ISV.')
+                            ->label(fn (Get $get): string => self::esRecibo($get) ? 'Total del recibo' : 'Exento')
                             ->live(onBlur: true)
                             ->rules([
                                 fn (Get $get): Closure => function (string $attribute, mixed $value, Closure $fail) use ($get): void {
@@ -128,24 +133,16 @@ class CompraForm
                                     }
                                 },
                             ]),
-                        TextEntry::make('total_calculado')
-                            ->label('Total')
-                            ->state(fn (Get $get): string => lempiras(self::total($get)))
-                            ->size(TextSize::Large)
-                            ->weight(FontWeight::Bold)
-                            ->helperText('Gravado + ISV + exento. Se suma solo.')
-                            ->hidden(fn (Get $get): bool => self::esRecibo($get)),
-                        TextEntry::make('isv_que_se_descuenta')
-                            ->label('ISV que se descuenta de tus ventas')
-                            ->state(fn (Get $get): string => self::isvAcreditable($get))
+                        View::make('filament.compras.totales')
+                            ->viewData(fn (Get $get): array => self::totales($get))
                             ->hidden(fn (Get $get): bool => self::esRecibo($get))
-                            ->columnSpanFull(),
-                        Textarea::make('notas')
-                            ->label('Notas')
-                            ->placeholder('Opcional')
-                            ->rows(2)
-                            ->columnSpanFull(),
+                            ->columnSpan(['sm' => 1, 'lg' => 3]),
                     ]),
+
+                Textarea::make('notas')
+                    ->label('Notas')
+                    ->placeholder('Opcional')
+                    ->rows(2),
             ]);
     }
 
@@ -166,8 +163,7 @@ class CompraForm
     {
         return MontoField::make($campo, $etiqueta)
             ->live(onBlur: true)
-            ->hidden(fn (Get $get): bool => self::esRecibo($get))
-            ->helperText('Se calcula solo. Corrígelo si la factura dice otra cosa.');
+            ->hidden(fn (Get $get): bool => self::esRecibo($get));
     }
 
     private static function tipo(Get $get): ?TipoDocumentoCompra
@@ -199,19 +195,23 @@ class CompraForm
         );
     }
 
-    private static function isvAcreditable(Get $get): string
+    /**
+     * Lo que muestra el cuadro de la derecha: sin ISV, ISV, total y si
+     * ese ISV se puede descontar.
+     *
+     * @return array{sin_isv: float, isv: float, total: float, sin_rtn: bool}
+     */
+    private static function totales(Get $get): array
     {
         $isv = round(self::numero($get('isv_15')) + self::numero($get('isv_18')), 2);
+        $total = self::total($get);
 
-        if ($isv <= 0) {
-            return 'Esta factura no trae ISV.';
-        }
-
-        if (blank($get('rtn_proveedor'))) {
-            return 'Sin el RTN del proveedor, el SAR no acepta descontar los '.lempiras($isv).'.';
-        }
-
-        return lempiras($isv);
+        return [
+            'sin_isv' => round($total - $isv, 2),
+            'isv'     => $isv,
+            'total'   => $total,
+            'sin_rtn' => $isv > 0 && blank($get('rtn_proveedor')),
+        ];
     }
 
     private static function numero(mixed $valor): float
