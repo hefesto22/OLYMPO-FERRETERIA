@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Database\Factories;
 
 use App\Models\EntradaInventario;
-use App\Models\Proveedor;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -23,9 +22,7 @@ class EntradaInventarioFactory extends Factory
     public function definition(): array
     {
         return [
-            'proveedor_id' => Proveedor::factory(),
-            'referencia'   => fake()->numerify('000-001-01-########'),
-            'fecha'        => now()->toDateString(),
+            'fecha' => now()->toDateString(),
         ];
     }
 }

@@ -21,6 +21,10 @@ use Illuminate\Support\Carbon;
 /**
  * Ajuste de inventario (inventario inicial, conteo físico, merma…).
  *
+ * El motivo decide hacia dónde mueve (ver MotivoAjuste::tipo()); solo
+ * "Otro" guarda el tipo que se escogió. La fecha es la del día en que se
+ * registra y quién lo registró lo guarda HasAuditFields: los dos solos.
+ *
  * @property int $id
  * @property string|null $numero
  * @property Carbon $fecha
@@ -75,6 +79,20 @@ class AjusteInventario extends Model
 
     protected static function booted(): void
     {
+        static::creating(static function (AjusteInventario $ajuste): void {
+            if ($ajuste->getAttribute('fecha') === null) {
+                $ajuste->setAttribute('fecha', now()->toDateString());
+            }
+        });
+
+        static::saving(static function (AjusteInventario $ajuste): void {
+            $tipo = $ajuste->motivo->tipo();
+
+            if ($tipo !== null) {
+                $ajuste->setAttribute('tipo', $tipo);
+            }
+        });
+
         static::created(static function (AjusteInventario $ajuste): void {
             $prefijo = (string) config('ferreteria.documentos.prefijo_ajuste', 'AJ');
 

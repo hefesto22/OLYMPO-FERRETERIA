@@ -5,6 +5,8 @@ declare(strict_types=1);
 use App\Domain\Exceptions\CantidadInvalidaException;
 use App\Domain\Exceptions\StockInsuficienteException;
 use App\Enums\EstadoDocumento;
+use App\Enums\MotivoAjuste;
+use App\Enums\TipoAjuste;
 use App\Enums\TipoMovimientoInventario;
 use App\Models\AjusteInventario;
 use App\Models\MovimientoInventario;
@@ -33,6 +35,70 @@ it('aplica un inventario inicial con su costo', function (): void {
         ->and($ajuste->estado)->toBe(EstadoDocumento::Confirmado)
         ->and($ajuste->aplicado_at)->not->toBeNull()
         ->and(MovimientoInventario::query()->sole()->tipo)->toBe(TipoMovimientoInventario::InventarioInicial);
+});
+
+it('un conteo físico deja cada producto en lo contado', function (): void {
+    $inventario = app(InventarioService::class);
+    $clavo = Producto::factory()->create();
+    $tubo = Producto::factory()->create();
+    $cinta = Producto::factory()->create();
+    $inventario->registrarEntrada($clavo, 30, 10.00, TipoMovimientoInventario::InventarioInicial);
+    $inventario->registrarEntrada($tubo, 10, 40.00, TipoMovimientoInventario::InventarioInicial);
+    $inventario->registrarEntrada($cinta, 7, 25.00, TipoMovimientoInventario::InventarioInicial);
+
+    /** @var AjusteInventario $ajuste */
+    $ajuste = AjusteInventario::factory()->conteo()->create();
+    $ajuste->detalles()->create(['producto_id' => $clavo->id, 'contado' => 25]);
+    $ajuste->detalles()->create(['producto_id' => $tubo->id, 'contado' => 14]);
+    $ajuste->detalles()->create(['producto_id' => $cinta->id, 'contado' => 7]);
+
+    app(AjusteInventarioService::class)->aplicar($ajuste);
+
+    // Faltan 5 clavos, sobran 4 tubos (al costo promedio) y la cinta cuadra.
+    expect((float) $clavo->refresh()->stock)->toBe(25.0)
+        ->and((float) $tubo->refresh()->stock)->toBe(14.0)
+        ->and((float) $tubo->costo_promedio)->toBe(40.0)
+        ->and((float) $cinta->refresh()->stock)->toBe(7.0)
+        ->and(MovimientoInventario::query()->where('tipo', TipoMovimientoInventario::AjusteSalida)->count())->toBe(1)
+        ->and(MovimientoInventario::query()->where('tipo', TipoMovimientoInventario::AjusteEntrada)->count())->toBe(1);
+
+    $lineas = $ajuste->refresh()->detalles->keyBy('producto_id');
+
+    expect($lineas[$clavo->id]->tipo)->toBe(TipoAjuste::Salida)
+        ->and((float) $lineas[$clavo->id]->cantidad)->toBe(5.0)
+        ->and((float) $lineas[$clavo->id]->existencia_antes)->toBe(30.0)
+        ->and($lineas[$tubo->id]->tipo)->toBe(TipoAjuste::Entrada)
+        ->and($lineas[$cinta->id]->tipo)->toBeNull()
+        ->and((float) $lineas[$cinta->id]->cantidad)->toBe(0.0);
+});
+
+it('el conteo se vuelve a sacar al aplicar, con la existencia de ese momento', function (): void {
+    $inventario = app(InventarioService::class);
+    $producto = Producto::factory()->create();
+    $inventario->registrarEntrada($producto, 30, 10.00, TipoMovimientoInventario::InventarioInicial);
+
+    /** @var AjusteInventario $ajuste */
+    $ajuste = AjusteInventario::factory()->conteo()->create();
+    $ajuste->detalles()->create(['producto_id' => $producto->id, 'contado' => 25]);
+
+    // Mientras el conteo estaba en borrador se vendieron 2.
+    $inventario->registrarSalida($producto, 2, TipoMovimientoInventario::SalidaVenta);
+
+    app(AjusteInventarioService::class)->aplicar($ajuste);
+
+    expect((float) $producto->refresh()->stock)->toBe(25.0)
+        ->and((float) $ajuste->detalles()->sole()->cantidad)->toBe(3.0);
+});
+
+it('el motivo decide si suma o resta, y la fecha es la del día', function (): void {
+    $ajuste = AjusteInventario::query()->create([
+        'motivo' => MotivoAjuste::DanoMerma,
+        'tipo'   => TipoAjuste::Entrada,
+    ]);
+
+    expect($ajuste->refresh()->tipo)->toBe(TipoAjuste::Salida)
+        ->and($ajuste->fecha->isToday())->toBeTrue()
+        ->and($ajuste->numero)->toStartWith('AJ-');
 });
 
 it('una salida mayor que la existencia lanza excepción y no mueve nada', function (): void {

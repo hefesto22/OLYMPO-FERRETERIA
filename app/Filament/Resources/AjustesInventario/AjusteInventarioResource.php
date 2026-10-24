@@ -4,10 +4,7 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\AjustesInventario;
 
-use App\Filament\Resources\AjustesInventario\Pages\CreateAjusteInventario;
-use App\Filament\Resources\AjustesInventario\Pages\EditAjusteInventario;
-use App\Filament\Resources\AjustesInventario\Pages\ListAjustesInventario;
-use App\Filament\Resources\AjustesInventario\Pages\ViewAjusteInventario;
+use App\Filament\Resources\AjustesInventario\Pages\ManageAjustesInventario;
 use App\Filament\Resources\AjustesInventario\Schemas\AjusteInventarioForm;
 use App\Filament\Resources\AjustesInventario\Schemas\AjusteInventarioInfolist;
 use App\Filament\Resources\AjustesInventario\Tables\AjustesInventarioTable;
@@ -19,6 +16,10 @@ use Filament\Support\Icons\Heroicon;
 use Filament\Tables\Table;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * Ajustes de inventario: inventario inicial, conteo físico, mermas,
+ * robos y uso interno. Se crean, editan (en borrador) y ven en modales.
+ */
 class AjusteInventarioResource extends Resource
 {
     protected static ?string $model = AjusteInventario::class;
@@ -68,10 +69,7 @@ class AjusteInventarioResource extends Resource
     public static function getPages(): array
     {
         return [
-            'index'  => ListAjustesInventario::route('/'),
-            'create' => CreateAjusteInventario::route('/create'),
-            'view'   => ViewAjusteInventario::route('/{record}'),
-            'edit'   => EditAjusteInventario::route('/{record}/edit'),
+            'index' => ManageAjustesInventario::route('/'),
         ];
     }
 }

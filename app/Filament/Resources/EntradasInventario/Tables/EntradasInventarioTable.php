@@ -34,21 +34,13 @@ class EntradasInventarioTable
                     ->label('Fecha')
                     ->date('d/m/Y')
                     ->sortable(),
-                TextColumn::make('proveedor.nombre')
-                    ->label('Proveedor')
-                    ->searchable()
-                    ->placeholder('Sin proveedor')
-                    ->wrap(),
-                TextColumn::make('referencia')
-                    ->label('Referencia')
-                    ->searchable()
-                    ->placeholder('—')
-                    ->toggleable(),
+                TextColumn::make('createdBy.name')
+                    ->label('Registró')
+                    ->placeholder('—'),
                 TextColumn::make('detalles_count')
                     ->label('Productos')
                     ->counts('detalles')
-                    ->alignEnd()
-                    ->toggleable(),
+                    ->alignEnd(),
                 TextColumn::make('estado')
                     ->label('Estado')
                     ->badge(),
@@ -57,21 +49,12 @@ class EntradasInventarioTable
                     ->formatStateUsing(fn (mixed $state): string => lempiras((float) $state))
                     ->sortable()
                     ->alignEnd(),
-                TextColumn::make('createdBy.name')
-                    ->label('Registró')
-                    ->placeholder('—')
-                    ->toggleable(isToggledHiddenByDefault: true),
             ])
             ->defaultSort('id', 'desc')
             ->filters([
                 SelectFilter::make('estado')
                     ->label('Estado')
                     ->options(EstadoDocumento::class),
-                SelectFilter::make('proveedor')
-                    ->label('Proveedor')
-                    ->relationship('proveedor', 'nombre')
-                    ->searchable()
-                    ->preload(),
                 Filter::make('fecha')
                     ->schema([
                         DatePicker::make('desde')->label('Desde'),
@@ -92,6 +75,8 @@ class EntradasInventarioTable
                         ->visible(fn (EntradaInventario $record): bool => $record->esBorrador()),
                 ]),
             ])
-            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with(['proveedor', 'createdBy']));
+            ->emptyStateHeading('Todavía no hay entradas')
+            ->emptyStateDescription('Aquí se carga la mercadería que entra al inventario: productos, cantidades y costo neto. Las facturas de los proveedores van en Compras.')
+            ->modifyQueryUsing(fn (Builder $query): Builder => $query->with('createdBy'));
     }
 }

@@ -7,11 +7,23 @@ namespace App\Filament\Resources\EntradasInventario\Pages;
 use App\Filament\Resources\EntradasInventario\EntradaInventarioResource;
 use App\Models\EntradaInventario;
 use App\Services\Inventario\EntradaInventarioService;
+use Filament\Actions\Action;
 use Filament\Resources\Pages\CreateRecord;
 
 class CreateEntradaInventario extends CreateRecord
 {
     protected static string $resource = EntradaInventarioResource::class;
+
+    protected static ?string $title = 'Nueva entrada de inventario';
+
+    protected static ?string $breadcrumb = 'Nueva';
+
+    protected static bool $canCreateAnother = false;
+
+    protected function getCreateFormAction(): Action
+    {
+        return parent::getCreateFormAction()->label('Guardar entrada');
+    }
 
     protected function afterCreate(): void
     {

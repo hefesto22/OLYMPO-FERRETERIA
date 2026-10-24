@@ -44,12 +44,6 @@ class ProveedoresTable
                     ->counts('compras')
                     ->sortable()
                     ->alignEnd(),
-                TextColumn::make('entradas_count')
-                    ->label('Entradas')
-                    ->counts('entradas')
-                    ->sortable()
-                    ->alignEnd()
-                    ->toggleable(),
                 ToggleColumn::make('activo')
                     ->label('Activo'),
             ])
@@ -61,7 +55,7 @@ class ProveedoresTable
             ->recordActions([
                 EditAction::make(),
                 DeleteAction::make()
-                    ->hidden(fn (Proveedor $record): bool => $record->tieneMovimientos()),
+                    ->hidden(fn (Proveedor $record): bool => $record->tieneCompras()),
                 RestoreAction::make(),
             ])
             ->modifyQueryUsing(fn (Builder $query): Builder => $query->withoutGlobalScopes([SoftDeletingScope::class]));

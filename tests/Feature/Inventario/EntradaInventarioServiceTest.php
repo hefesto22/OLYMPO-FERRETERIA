@@ -11,6 +11,7 @@ use App\Models\MovimientoInventario;
 use App\Models\Producto;
 use App\Models\ProductoPresentacion;
 use App\Models\UnidadMedida;
+use App\Models\User;
 use App\Services\Inventario\EntradaInventarioService;
 use App\Services\Inventario\InventarioService;
 
@@ -141,17 +142,22 @@ it('no anula una entrada cuya mercadería ya salió, y no cambia nada', function
         ->and($entrada->refresh()->estado)->toBe(EstadoDocumento::Confirmado);
 });
 
-it('numera las entradas con E y permite entrar mercadería sin proveedor', function (): void {
+it('numera con E, toma la fecha del día y guarda quién la registró', function (): void {
+    /** @var User $usuario */
+    $usuario = User::factory()->create();
+    test()->actingAs($usuario);
     $producto = Producto::factory()->create();
 
-    /** @var EntradaInventario $entrada */
-    $entrada = EntradaInventario::factory()->create(['proveedor_id' => null, 'referencia' => null]);
+    // Sin proveedor, sin referencia y sin fecha: lo demás lo pone el sistema.
+    $entrada = EntradaInventario::query()->create([]);
     $entrada->detalles()->create(['producto_id' => $producto->id, 'cantidad' => 3, 'costo_unitario' => 10]);
 
     app(EntradaInventarioService::class)->confirmar($entrada);
+    $entrada->refresh();
 
-    expect($entrada->refresh()->numero)->toStartWith('E-')
-        ->and($entrada->proveedor)->toBeNull()
+    expect($entrada->numero)->toStartWith('E-')
+        ->and($entrada->fecha->isToday())->toBeTrue()
+        ->and($entrada->created_by)->toBe($usuario->id)
         ->and((float) $producto->refresh()->stock)->toBe(3.0)
         ->and(MovimientoInventario::query()->sole()->descripcion)->toBe("Entrada {$entrada->numero}");
 });

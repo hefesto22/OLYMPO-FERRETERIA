@@ -9,16 +9,22 @@ use Filament\Support\Contracts\HasIcon;
 use Filament\Support\Contracts\HasLabel;
 use Filament\Support\Icons\Heroicon;
 
+/**
+ * Hacia dónde mueve el inventario un ajuste. En un conteo físico cada
+ * producto queda en lo contado: unos suben, otros bajan.
+ */
 enum TipoAjuste: string implements HasColor, HasIcon, HasLabel
 {
     case Entrada = 'entrada';
     case Salida = 'salida';
+    case Conteo = 'conteo';
 
     public function getLabel(): string
     {
         return match ($this) {
             self::Entrada => 'Entrada (suma al inventario)',
             self::Salida  => 'Salida (resta del inventario)',
+            self::Conteo  => 'Conteo (queda lo contado)',
         };
     }
 
@@ -27,6 +33,7 @@ enum TipoAjuste: string implements HasColor, HasIcon, HasLabel
         return match ($this) {
             self::Entrada => 'success',
             self::Salida  => 'danger',
+            self::Conteo  => 'info',
         };
     }
 
@@ -35,6 +42,7 @@ enum TipoAjuste: string implements HasColor, HasIcon, HasLabel
         return match ($this) {
             self::Entrada => Heroicon::OutlinedPlusCircle,
             self::Salida  => Heroicon::OutlinedMinusCircle,
+            self::Conteo  => Heroicon::OutlinedClipboardDocumentCheck,
         };
     }
 

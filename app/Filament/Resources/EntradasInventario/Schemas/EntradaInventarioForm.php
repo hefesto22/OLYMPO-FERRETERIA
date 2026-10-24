@@ -4,19 +4,18 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\EntradasInventario\Schemas;
 
-use App\Filament\Schemas\Components\RTNField;
-use App\Filament\Schemas\Components\TelefonoHondurasField;
+use App\Models\EntradaInventario;
 use App\Models\Producto;
+use App\Models\User;
 use App\Support\Inventario\OpcionesProducto;
 use App\Support\Inventario\ProyeccionEntrada;
 use App\Support\Inventario\TotalesEntrada;
-use Filament\Forms\Components\DatePicker;
 use Filament\Forms\Components\Repeater;
 use Filament\Forms\Components\Repeater\TableColumn;
 use Filament\Forms\Components\Select;
-use Filament\Forms\Components\Textarea;
 use Filament\Forms\Components\TextInput;
 use Filament\Schemas\Components\Component;
+use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Section;
 use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
@@ -34,47 +33,10 @@ class EntradaInventarioForm
     {
         return $schema
             ->components([
-                Section::make('Datos de la entrada')
-                    ->icon(Heroicon::OutlinedDocumentText)
-                    ->columns(3)
-                    ->columnSpanFull()
-                    ->schema([
-                        Select::make('proveedor_id')
-                            ->label('Proveedor')
-                            ->relationship('proveedor', 'nombre', fn (Builder $query): Builder => $query->where('activo', true))
-                            ->searchable()
-                            ->preload()
-                            ->placeholder('Sin proveedor')
-                            ->helperText('Opcional: de quién es la mercadería.')
-                            ->createOptionModalHeading('Nuevo proveedor')
-                            ->createOptionForm([
-                                TextInput::make('nombre')
-                                    ->label('Nombre o razón social')
-                                    ->required()
-                                    ->maxLength(150),
-                                RTNField::make()
-                                    ->unique(table: 'proveedores', column: 'rtn'),
-                                TelefonoHondurasField::make('telefono', 'Teléfono'),
-                            ]),
-                        TextInput::make('referencia')
-                            ->label('Referencia')
-                            ->maxLength(40)
-                            ->placeholder('Factura, remisión o nota de envío')
-                            ->helperText('Opcional. La factura en sí se registra en Compras.'),
-                        DatePicker::make('fecha')
-                            ->label('Fecha')
-                            ->required()
-                            ->default(now())
-                            ->maxDate(now()),
-                        Textarea::make('notas')
-                            ->label('Notas')
-                            ->rows(2)
-                            ->columnSpanFull(),
-                    ]),
-
-                Section::make('Productos')
-                    ->description('Escribe el costo neto de cada producto, sin ISV: el sistema calcula en cuánto te sale con ISV. Se puede cargar por caja, rollo o cubeta: el sistema lo pasa a la unidad base. "Al confirmar" muestra el costo ponderado con lo que ya hay en existencia y el precio de venta que va a quedar.')
-                    ->icon(Heroicon::OutlinedCube)
+                // Quién y cuándo los pone el sistema: aquí solo se ven.
+                Section::make('Productos que entran')
+                    ->description(fn (?EntradaInventario $record): string => self::quienYCuando($record))
+                    ->icon(Heroicon::OutlinedArchiveBoxArrowDown)
                     ->columnSpanFull()
                     ->schema([
                         Repeater::make('detalles')
@@ -94,8 +56,15 @@ class EntradaInventarioForm
                             ->addActionLabel('Agregar producto')
                             ->live(),
 
-                        View::make('filament.entradas.totales')
-                            ->viewData(fn (Get $get): array => ['totales' => self::totales($get)]),
+                        Grid::make(['default' => 1, 'lg' => 2])
+                            ->schema([
+                                TextInput::make('notas')
+                                    ->label('Nota')
+                                    ->placeholder('Opcional: de dónde viene, quién la trajo…')
+                                    ->maxLength(255),
+                                View::make('filament.entradas.totales')
+                                    ->viewData(fn (Get $get): array => ['totales' => self::totales($get)]),
+                            ]),
                     ]),
             ]);
     }
@@ -176,6 +145,24 @@ class EntradaInventarioForm
         return Text::make($texto)
             ->color('gray')
             ->size(TextSize::Small);
+    }
+
+    /**
+     * "Hoy, 22 de octubre de 2026, la registra Ana." Al editar, cuándo y
+     * quién la registró.
+     */
+    private static function quienYCuando(?EntradaInventario $record): string
+    {
+        if ($record !== null) {
+            $quien = $record->createdBy?->name;
+
+            return 'Registrada el '.fechaLarga($record->fecha).(is_string($quien) ? ' por '.$quien : '').'. El costo neto va sin ISV.';
+        }
+
+        $usuario = auth()->user();
+        $quien = $usuario instanceof User ? ', la registra '.$usuario->name : '';
+
+        return 'Hoy, '.fechaLarga(now()).$quien.'. Escribe el costo neto (sin ISV) de cada producto.';
     }
 
     /**

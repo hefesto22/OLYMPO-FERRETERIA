@@ -10,7 +10,8 @@ use App\Models\AjusteInventario;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * Crea el ajuste en borrador, sin líneas.
+ * Crea el ajuste en borrador, sin líneas. Por defecto "Otro" que suma:
+ * es el único motivo que respeta el tipo que se le da.
  *
  * @extends Factory<AjusteInventario>
  */
@@ -26,7 +27,7 @@ class AjusteInventarioFactory extends Factory
         return [
             'fecha'  => now()->toDateString(),
             'tipo'   => TipoAjuste::Entrada,
-            'motivo' => MotivoAjuste::ConteoFisico,
+            'motivo' => MotivoAjuste::Otro,
         ];
     }
 
@@ -35,6 +36,17 @@ class AjusteInventarioFactory extends Factory
         return $this->state(fn (array $attributes): array => [
             'tipo'   => TipoAjuste::Salida,
             'motivo' => MotivoAjuste::DanoMerma,
+        ]);
+    }
+
+    /**
+     * Conteo físico: cada línea lleva lo contado.
+     */
+    public function conteo(): static
+    {
+        return $this->state(fn (array $attributes): array => [
+            'tipo'   => TipoAjuste::Conteo,
+            'motivo' => MotivoAjuste::ConteoFisico,
         ]);
     }
 

@@ -10,7 +10,7 @@ use App\Enums\MotivoAjuste;
 use App\Enums\TipoAjuste;
 use App\Enums\TipoMovimientoInventario;
 use App\Models\AjusteInventario;
-use App\Models\AjusteInventarioDetalle;
+use App\Models\Producto;
 use App\Services\Precios\PrecioService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -19,6 +19,10 @@ use Illuminate\Support\Facades\DB;
  * Aplica un ajuste de inventario. Un ajuste aplicado no se anula: si
  * hubo un error se corrige con otro ajuste en sentido contrario, que
  * deja rastro de ambos en el kardex.
+ *
+ * En un conteo físico la diferencia se vuelve a sacar al aplicar, con la
+ * existencia de ese momento: cada producto queda en lo contado aunque
+ * se haya vendido algo mientras el ajuste estaba en borrador.
  */
 final class AjusteInventarioService
 {
@@ -44,11 +48,31 @@ final class AjusteInventarioService
 
             $descripcion = "Ajuste {$ajuste->numero}: {$ajuste->motivo->getLabel()}";
 
+            /** @var list<int> $conEntrada */
+            $conEntrada = [];
+
             foreach ($ajuste->detalles as $detalle) {
-                $producto = $detalle->producto;
+                // La existencia de este momento, con la fila bloqueada hasta el final.
+                $producto = Producto::withTrashed()->whereKey($detalle->producto_id)->lockForUpdate()->firstOrFail();
+                $existencia = (float) $producto->stock;
+
+                if ($ajuste->tipo === TipoAjuste::Conteo) {
+                    $detalle->calcularConteo($existencia);
+                } else {
+                    $detalle->forceFill(['existencia_antes' => $existencia]);
+                }
+
+                $detalle->saveQuietly();
+
+                $tipo = $detalle->tipoMovimiento($ajuste->tipo);
                 $cantidad = (float) $detalle->cantidad;
 
-                if ($ajuste->tipo === TipoAjuste::Entrada) {
+                // Conteo igual a lo que había: no se mueve nada.
+                if ($tipo === null || $cantidad <= 0) {
+                    continue;
+                }
+
+                if ($tipo === TipoAjuste::Entrada) {
                     $costo = (float) $detalle->costo_unitario > 0
                         ? (float) $detalle->costo_unitario
                         : (float) $producto->costo_promedio;
@@ -58,6 +82,7 @@ final class AjusteInventarioService
                         : TipoMovimientoInventario::AjusteEntrada;
 
                     $this->inventario->registrarEntrada($producto, $cantidad, $costo, $tipoMovimiento, $ajuste, $descripcion);
+                    $conEntrada[] = $producto->id;
 
                     continue;
                 }
@@ -66,11 +91,8 @@ final class AjusteInventarioService
             }
 
             // Una entrada con costo mueve el promedio: los precios con margen se revisan.
-            if ($ajuste->tipo === TipoAjuste::Entrada) {
-                $this->precios->revisar(
-                    $ajuste->detalles->map(fn (AjusteInventarioDetalle $detalle): int => $detalle->producto_id)->all(),
-                    $descripcion,
-                );
+            if ($conEntrada !== []) {
+                $this->precios->revisar($conEntrada, $descripcion);
             }
 
             $ajuste->forceFill([

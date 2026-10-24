@@ -21,13 +21,14 @@ use Illuminate\Support\Carbon;
  * a qué costo. Es el único lugar donde se carga stock comprado; la
  * factura o el recibo del proveedor se registra aparte, en Compras.
  *
+ * Solo guarda quién la registró (created_by) y la fecha, los dos solos:
+ * la fecha es la del día en que se registra.
+ *
  * Estado, totales y datos de confirmación/anulación NO son fillable:
  * los maneja EntradaInventarioService.
  *
  * @property int $id
  * @property string|null $numero
- * @property int|null $proveedor_id
- * @property string|null $referencia
  * @property Carbon $fecha
  * @property EstadoDocumento $estado
  * @property string $subtotal
@@ -41,7 +42,6 @@ use Illuminate\Support\Carbon;
  * @property string|null $motivo_anulacion
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- * @property-read Proveedor|null $proveedor
  * @property-read Collection<int, EntradaInventarioDetalle> $detalles
  * @property-read User|null $confirmadaPor
  * @property-read User|null $anuladaPor
@@ -57,8 +57,6 @@ class EntradaInventario extends Model
 
     /** @var list<string> */
     protected $fillable = [
-        'proveedor_id',
-        'referencia',
         'fecha',
         'notas',
         'created_by',
@@ -91,19 +89,17 @@ class EntradaInventario extends Model
 
     protected static function booted(): void
     {
+        static::creating(static function (EntradaInventario $entrada): void {
+            if ($entrada->getAttribute('fecha') === null) {
+                $entrada->setAttribute('fecha', now()->toDateString());
+            }
+        });
+
         static::created(static function (EntradaInventario $entrada): void {
             $prefijo = (string) config('ferreteria.documentos.prefijo_entrada', 'E');
 
             $entrada->forceFill(['numero' => NumeroDocumento::formatear($prefijo, $entrada->id)])->saveQuietly();
         });
-    }
-
-    /**
-     * @return BelongsTo<Proveedor, $this>
-     */
-    public function proveedor(): BelongsTo
-    {
-        return $this->belongsTo(Proveedor::class, 'proveedor_id');
     }
 
     /**

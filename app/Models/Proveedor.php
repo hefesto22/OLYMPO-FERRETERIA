@@ -82,20 +82,10 @@ class Proveedor extends Model
     }
 
     /**
-     * Mercadería que entró al inventario de este proveedor.
-     *
-     * @return HasMany<EntradaInventario, $this>
+     * Con compras registradas no se borra: el historial lo necesita.
      */
-    public function entradas(): HasMany
+    public function tieneCompras(): bool
     {
-        return $this->hasMany(EntradaInventario::class, 'proveedor_id');
-    }
-
-    /**
-     * Con compras o entradas registradas no se borra: el historial lo necesita.
-     */
-    public function tieneMovimientos(): bool
-    {
-        return $this->compras()->withTrashed()->exists() || $this->entradas()->exists();
+        return $this->compras()->withTrashed()->exists();
     }
 }

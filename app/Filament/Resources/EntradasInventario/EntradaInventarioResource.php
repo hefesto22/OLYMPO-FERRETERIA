@@ -83,6 +83,6 @@ class EntradaInventarioResource extends Resource
 
     public static function getGloballySearchableAttributes(): array
     {
-        return ['numero', 'referencia'];
+        return ['numero'];
     }
 }

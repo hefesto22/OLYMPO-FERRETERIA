@@ -680,6 +680,61 @@
         color: var(--warning-400);
     }
 
+    /* ── Ajustes: cuánto sobra, falta o queda en cada línea ──────────── */
+
+    .ol-ajuste {
+        display: grid;
+        gap: 0.125rem;
+        min-width: 9rem;
+        padding-top: 0.4375rem;
+        font-size: 0.8125rem;
+        line-height: 1.35;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .ol-ajuste__cambio {
+        font-size: 0.9375rem;
+        font-weight: 600;
+        color: var(--gray-950);
+    }
+
+    .dark .ol-ajuste__cambio {
+        color: #fff;
+    }
+
+    .ol-ajuste__cambio.es-entra {
+        color: var(--success-700);
+    }
+
+    .ol-ajuste__cambio.es-sale {
+        color: var(--danger-600);
+    }
+
+    .ol-ajuste__cambio.es-igual {
+        font-weight: 500;
+        color: var(--ol-tenue);
+    }
+
+    .dark .ol-ajuste__cambio.es-entra {
+        color: var(--success-400);
+    }
+
+    .dark .ol-ajuste__cambio.es-sale {
+        color: var(--danger-400);
+    }
+
+    .ol-ajuste__detalle,
+    .ol-ajuste-resumen__vacio {
+        color: var(--ol-tenue);
+    }
+
+    .ol-ajuste-resumen__vacio {
+        max-width: 20rem;
+        margin-left: auto;
+        font-size: 0.875rem;
+        text-align: right;
+    }
+
     /* ── Producto: el precio que sale y de dónde ──────────────────────── */
 
     .ol-precio {

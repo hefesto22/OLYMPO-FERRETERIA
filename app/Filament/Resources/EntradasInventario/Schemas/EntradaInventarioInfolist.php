@@ -32,12 +32,6 @@ class EntradaInventarioInfolist
                         TextEntry::make('estado')
                             ->label('Estado')
                             ->badge(),
-                        TextEntry::make('proveedor.nombre')
-                            ->label('Proveedor')
-                            ->placeholder('Sin proveedor'),
-                        TextEntry::make('referencia')
-                            ->label('Referencia')
-                            ->placeholder('—'),
                         TextEntry::make('fecha')
                             ->label('Fecha')
                             ->date('d/m/Y'),
@@ -63,7 +57,7 @@ class EntradaInventarioInfolist
                             ->columnSpan(2)
                             ->visible(fn (EntradaInventario $record): bool => $record->estado === EstadoDocumento::Anulado),
                         TextEntry::make('notas')
-                            ->label('Notas')
+                            ->label('Nota')
                             ->placeholder('—')
                             ->columnSpanFull(),
                     ]),
