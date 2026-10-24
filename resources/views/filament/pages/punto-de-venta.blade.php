@@ -783,41 +783,6 @@
 
                                 <div class="pos-linea__abajo">
                                     <span class="pos-cifra">{{ lempiras($linea['precio']) }} c/u</span>
-                                    @if ($descuentoMaximo > 0)
-                                        <span class="pos-descuento">
-                                            Desc.
-                                            <input
-                                                type="number"
-                                                step="any"
-                                                min="0"
-                                                inputmode="decimal"
-                                                placeholder="0"
-                                                class="pos-cifra"
-                                                aria-label="Descuento de {{ $linea['producto']->nombre }}"
-                                                wire:model.live.debounce.500ms="lineas.{{ $linea['clave'] }}.descuento"
-                                            />
-                                            <span class="pos-unidad" role="group" aria-label="Descuento en">
-                                                <button
-                                                    type="button"
-                                                    aria-pressed="{{ $linea['descuento_tipo'] === \App\Enums\TipoDescuento::Porcentaje ? 'true' : 'false' }}"
-                                                    wire:click="tipoDescuento('{{ $linea['clave'] }}', 'porcentaje')"
-                                                    title="Descuento en porcentaje"
-                                                >%</button>
-                                                <button
-                                                    type="button"
-                                                    aria-pressed="{{ $linea['descuento_tipo'] === \App\Enums\TipoDescuento::Monto ? 'true' : 'false' }}"
-                                                    wire:click="tipoDescuento('{{ $linea['clave'] }}', 'monto')"
-                                                    title="Descuento en lempiras, por toda la línea"
-                                                >L</button>
-                                            </span>
-                                        </span>
-                                    @endif
-                                    @if ($linea['descuento_linea'] > 0)
-                                        <span class="pos-cifra">− {{ lempiras($linea['descuento_linea']) }}</span>
-                                    @endif
-                                    @if ($linea['excede_descuento'])
-                                        <span class="pos-linea__aviso">Pasa tu máximo de {{ cantidadFormato($descuentoMaximo, 2) }} %</span>
-                                    @endif
                                     @if ($linea['excede'])
                                         <span class="pos-linea__aviso">Solo hay {{ cantidadFormato($linea['existencia']) }} {{ $linea['producto']->unidadMedida->abreviatura }}</span>
                                     @endif
@@ -874,7 +839,7 @@
                                     </span>
                                 </div>
                                 @if ($descuentos['excede'])
-                                    <span class="pos-global__aviso">Entre todos los descuentos van {{ cantidadFormato($descuentos['porcentaje'], 2) }} % y tu máximo es {{ cantidadFormato($descuentoMaximo, 2) }} %.</span>
+                                    <span class="pos-global__aviso">El descuento es de {{ cantidadFormato($descuentos['porcentaje'], 2) }} % y tu máximo es {{ cantidadFormato($descuentoMaximo, 2) }} %.</span>
                                 @endif
                             </div>
                         @endif
@@ -883,10 +848,10 @@
                             <div>
                                 <span class="pos-total__etiqueta">Total</span>
                                 <span class="pos-total__detalle pos-cifra">
-                                    ISV incluido {{ lempiras($totales['isv_15'] + $totales['isv_18']) }}@if ($totales['descuento'] > 0), descuentos {{ lempiras($totales['descuento']) }}@endif
+                                    ISV incluido {{ lempiras($totales['isv_15'] + $totales['isv_18']) }}@if ($totales['descuento'] > 0), descuento {{ lempiras($totales['descuento']) }}@endif
                                 </span>
                                 @if ($puedeDescontar && ! $mostrarGlobal)
-                                    <button type="button" class="pos-total__accion" wire:click="abrirDescuentoGlobal">+ Descuento a toda la venta</button>
+                                    <button type="button" class="pos-total__accion" wire:click="abrirDescuentoGlobal">+ Descuento</button>
                                 @endif
                             </div>
                             <span class="pos-total__monto pos-cifra">{{ lempiras($totales['total']) }}</span>

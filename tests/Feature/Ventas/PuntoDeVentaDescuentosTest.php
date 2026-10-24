@@ -19,8 +19,8 @@ use Spatie\Permission\Models\Permission;
 use Spatie\Permission\Models\Role;
 
 /*
-| Descuentos en el punto de venta: en % o en lempiras por línea y a toda la
-| venta. Lo que se ve en pantalla es lo que queda guardado al cobrar.
+| Descuento en el punto de venta: uno solo, a toda la venta, en % o en
+| lempiras. Lo que se ve en pantalla es lo que queda guardado al cobrar.
 */
 
 beforeEach(function (): void {
@@ -43,7 +43,7 @@ beforeEach(function (): void {
     test()->actingAs($cajero);
 });
 
-it('cobra con descuento en lempiras en la línea y descuento a toda la venta', function (): void {
+it('cobra con un solo descuento a toda la venta', function (): void {
     /** @var Producto $martillo */
     $martillo = Producto::factory()->create(['nombre' => 'Martillo de uña', 'precio_venta' => 115]);
     app(InventarioService::class)->registrarEntrada($martillo, 10, 50.00, TipoMovimientoInventario::InventarioInicial);
@@ -54,33 +54,30 @@ it('cobra con descuento en lempiras en la línea y descuento a toda la venta', f
     $lineas = $pos->get('lineas');
     $clave = (string) array_key_first($lineas);
 
-    // 2 × 115 = 230 − L 10 = 220; menos 5 % a toda la venta = 209.
+    // 2 × 115 = 230; menos 10 % a toda la venta = 207. Las líneas ya no traen descuento propio.
     $pos->set("lineas.{$clave}.cantidad", 2)
-        ->call('tipoDescuento', $clave, 'monto')
-        ->set("lineas.{$clave}.descuento", 10)
-        ->set('venta.descuento_global', 5)
-        ->assertSee('L. 209.00')
-        ->assertSee('− L. 11.00')
+        ->assertDontSee('Descuento de Martillo de uña')
+        ->set('venta.descuento_global', 10)
+        ->assertSee('L. 207.00')
+        ->assertSee('− L. 23.00')
         ->call('cobrar');
 
     $venta = Venta::query()->sole();
     $detalle = $venta->detalles()->sole();
 
-    expect((float) $venta->total)->toBe(209.0)
-        ->and((float) $venta->descuento)->toBe(21.0)
-        ->and((float) $venta->descuento_global)->toBe(11.0)
+    expect((float) $venta->total)->toBe(207.0)
+        ->and((float) $venta->descuento)->toBe(23.0)
+        ->and((float) $venta->descuento_global)->toBe(23.0)
         ->and($venta->descuento_global_tipo)->toBe(TipoDescuento::Porcentaje)
-        ->and($detalle->descuento_tipo)->toBe(TipoDescuento::Monto)
-        ->and((float) $detalle->descuento_valor)->toBe(10.0)
-        ->and($detalle->descuentoDeLinea())->toBe(10.0);
+        ->and($detalle->descuentoDeLinea())->toBe(0.0);
 });
 
-it('avisa en pantalla cuando los descuentos pasan el tope del cajero', function (): void {
+it('avisa en pantalla cuando el descuento pasa el tope del cajero', function (): void {
     ConfiguracionEmpresa::actual()->update(['descuento_max_cajero' => 5]);
     $martillo = Producto::factory()->create(['nombre' => 'Martillo de uña', 'precio_venta' => 100]);
 
     Livewire::test(PuntoDeVenta::class)
         ->call('agregar', $martillo->id)
         ->set('venta.descuento_global', 10)
-        ->assertSee('Entre todos los descuentos van 10 % y tu máximo es 5 %.');
+        ->assertSee('El descuento es de 10 % y tu máximo es 5 %.');
 });

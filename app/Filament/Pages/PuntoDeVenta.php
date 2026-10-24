@@ -63,9 +63,9 @@ use Livewire\Attributes\Computed;
  * Pagos por líneas: efectivo, tarjeta o transferencia, combinables. La
  * primera línea sin monto toma lo que falta para el total.
  *
- * Descuentos en % o en lempiras, por línea y a toda la venta (el global se
- * reparte entre las líneas). El tope del rol se avisa en pantalla y lo
- * hace cumplir VentaService al cobrar.
+ * Un solo descuento, a toda la venta, en % o en lempiras (se reparte entre
+ * las líneas para separar bien el ISV en la factura). El tope del rol se
+ * avisa en pantalla y lo hace cumplir VentaService al cobrar.
  *
  * Teclado: F2 buscar, flechas para elegir en la lista, Enter agrega (o
  * agrega por código de barras), Esc limpia la búsqueda, F9 cobra.
@@ -75,7 +75,7 @@ use Livewire\Attributes\Computed;
  * muestran por turnos.
  *
  * @property Schema $form
- * @property-read list<array{clave: string, producto: Producto, presentacion: ProductoPresentacion|null, opciones: array<int, string>, unidad_base: string, cantidad: float, cantidad_base: float, descuento_tipo: TipoDescuento, descuento_pct: float, excede_descuento: bool, precio: float, existencia: float|null, excede: bool, tipo_isv: TipoIsv, bruto: float, total_linea: float, descuento_linea: float, descuento_global: float, descuento: float, total: float, base: float, isv: float}> $carrito
+ * @property-read list<array{clave: string, producto: Producto, presentacion: ProductoPresentacion|null, opciones: array<int, string>, unidad_base: string, cantidad: float, cantidad_base: float, precio: float, existencia: float|null, excede: bool, tipo_isv: TipoIsv, bruto: float, total_linea: float, descuento_global: float, descuento: float, total: float, base: float, isv: float}> $carrito
  * @property-read array{descuento: float, importe_exento: float, importe_gravado_15: float, importe_gravado_18: float, isv_15: float, isv_18: float, subtotal: float, total: float} $totales
  */
 class PuntoDeVenta extends Page
@@ -117,7 +117,7 @@ class PuntoDeVenta extends Page
 
     public int $limite = self::POR_PAGINA;
 
-    /** @var array<string, array{producto_id: int, presentacion_id: int|string|null, cantidad: float|int|string, descuento: float|int|string|null, descuento_tipo?: string}> */
+    /** @var array<string, array{producto_id: int, presentacion_id: int|string|null, cantidad: float|int|string}> */
     public array $lineas = [];
 
     /**
@@ -414,7 +414,7 @@ class PuntoDeVenta extends Page
     /**
      * Líneas del carrito con precio, existencia e importes calculados.
      *
-     * @return list<array{clave: string, producto: Producto, presentacion: ProductoPresentacion|null, opciones: array<int, string>, unidad_base: string, cantidad: float, cantidad_base: float, descuento_tipo: TipoDescuento, descuento_pct: float, excede_descuento: bool, precio: float, existencia: float|null, excede: bool, tipo_isv: TipoIsv, bruto: float, total_linea: float, descuento_linea: float, descuento_global: float, descuento: float, total: float, base: float, isv: float}>
+     * @return list<array{clave: string, producto: Producto, presentacion: ProductoPresentacion|null, opciones: array<int, string>, unidad_base: string, cantidad: float, cantidad_base: float, precio: float, existencia: float|null, excede: bool, tipo_isv: TipoIsv, bruto: float, total_linea: float, descuento_global: float, descuento: float, total: float, base: float, isv: float}>
      */
     #[Computed]
     public function carrito(): array
@@ -426,7 +426,7 @@ class PuntoDeVenta extends Page
      * Lo mismo que `carrito`, sin la caché del request: lo usa cobrar(),
      * que después vacía el carrito.
      *
-     * @return list<array{clave: string, producto: Producto, presentacion: ProductoPresentacion|null, opciones: array<int, string>, unidad_base: string, cantidad: float, cantidad_base: float, descuento_tipo: TipoDescuento, descuento_pct: float, excede_descuento: bool, precio: float, existencia: float|null, excede: bool, tipo_isv: TipoIsv, bruto: float, total_linea: float, descuento_linea: float, descuento_global: float, descuento: float, total: float, base: float, isv: float}>
+     * @return list<array{clave: string, producto: Producto, presentacion: ProductoPresentacion|null, opciones: array<int, string>, unidad_base: string, cantidad: float, cantidad_base: float, precio: float, existencia: float|null, excede: bool, tipo_isv: TipoIsv, bruto: float, total_linea: float, descuento_global: float, descuento: float, total: float, base: float, isv: float}>
      */
     private function calcularCarrito(): array
     {
@@ -446,7 +446,6 @@ class PuntoDeVenta extends Page
             ->keyBy('id');
 
         $lista = $this->listaPrecio();
-        $maximo = $this->descuentoMaximo();
         $previas = [];
 
         foreach ($this->lineas as $clave => $linea) {
@@ -464,11 +463,9 @@ class PuntoDeVenta extends Page
             $cantidad = max(0.0, self::numero($linea['cantidad']));
             $cantidadBase = $cantidad * ($presentacion !== null ? (float) $presentacion->factor : 1.0);
             $existencia = $producto->controla_stock ? (float) $producto->stock : null;
-            $tipoDescuento = TipoDescuento::desdeEstado($linea['descuento_tipo'] ?? null);
-            $descuento = max(0.0, self::numero($linea['descuento']));
             $precio = PrecioProducto::unitario($producto, $presentacion, $lista);
-            $calculo = CalculadoraVenta::linea($precio, $cantidad, $descuento, $producto->tipo_isv->tasa(), $tipoDescuento);
-            $porcentaje = CalculadoraVenta::porcentaje($calculo['bruto'], $descuento, $tipoDescuento);
+            // Sin descuento por línea: el único descuento es el de toda la venta.
+            $calculo = CalculadoraVenta::linea($precio, $cantidad, 0.0, $producto->tipo_isv->tasa());
 
             $opciones = [];
 
@@ -480,23 +477,19 @@ class PuntoDeVenta extends Page
             }
 
             $previas[] = [
-                'clave'            => (string) $clave,
-                'producto'         => $producto,
-                'presentacion'     => $presentacion,
-                'opciones'         => $opciones,
-                'unidad_base'      => $producto->unidadMedida->nombre,
-                'cantidad'         => $cantidad,
-                'cantidad_base'    => $cantidadBase,
-                'descuento_tipo'   => $tipoDescuento,
-                'descuento_pct'    => $porcentaje,
-                'excede_descuento' => $porcentaje - $maximo > 0.001,
-                'precio'           => $precio,
-                'existencia'       => $existencia,
-                'excede'           => $existencia !== null && $cantidadBase - $existencia > 0.000001,
-                'tipo_isv'         => $producto->tipo_isv,
-                'bruto'            => $calculo['bruto'],
-                'total_linea'      => $calculo['total'],
-                'descuento_linea'  => $calculo['descuento'],
+                'clave'         => (string) $clave,
+                'producto'      => $producto,
+                'presentacion'  => $presentacion,
+                'opciones'      => $opciones,
+                'unidad_base'   => $producto->unidadMedida->nombre,
+                'cantidad'      => $cantidad,
+                'cantidad_base' => $cantidadBase,
+                'precio'        => $precio,
+                'existencia'    => $existencia,
+                'excede'        => $existencia !== null && $cantidadBase - $existencia > 0.000001,
+                'tipo_isv'      => $producto->tipo_isv,
+                'bruto'         => $calculo['bruto'],
+                'total_linea'   => $calculo['total'],
             ];
         }
 
@@ -520,16 +513,12 @@ class PuntoDeVenta extends Page
                 'unidad_base'      => $previa['unidad_base'],
                 'cantidad'         => $previa['cantidad'],
                 'cantidad_base'    => $previa['cantidad_base'],
-                'descuento_tipo'   => $previa['descuento_tipo'],
-                'descuento_pct'    => $previa['descuento_pct'],
-                'excede_descuento' => $previa['excede_descuento'],
                 'precio'           => $previa['precio'],
                 'existencia'       => $previa['existencia'],
                 'excede'           => $previa['excede'],
                 'tipo_isv'         => $previa['tipo_isv'],
                 'bruto'            => $calculo['bruto'],
                 'total_linea'      => $previa['total_linea'],
-                'descuento_linea'  => $previa['descuento_linea'],
                 'descuento_global' => $parte,
                 'descuento'        => $calculo['descuento'],
                 'total'            => $calculo['total'],
@@ -702,16 +691,6 @@ class PuntoDeVenta extends Page
         return DescuentoPermitido::para($this->usuario());
     }
 
-    /**
-     * Descuento de la línea en % o en lempiras (por toda la línea).
-     */
-    public function tipoDescuento(string $clave, string $tipo): void
-    {
-        if (isset($this->lineas[$clave])) {
-            $this->lineas[$clave]['descuento_tipo'] = TipoDescuento::desdeEstado($tipo)->value;
-        }
-    }
-
     public function tipoDescuentoGlobal(string $tipo): void
     {
         $this->venta['descuento_global_tipo'] = TipoDescuento::desdeEstado($tipo)->value;
@@ -730,8 +709,8 @@ class PuntoDeVenta extends Page
     }
 
     /**
-     * El descuento a toda la venta: cómo se teclea, cuánto rebaja y si,
-     * junto con los de las líneas, pasa el tope del cajero.
+     * El descuento a toda la venta: cómo se teclea, cuánto rebaja y si
+     * pasa el tope del cajero.
      *
      * @return array{tipo: TipoDescuento, global: float, porcentaje: float, excede: bool}
      */
@@ -1040,8 +1019,6 @@ class PuntoDeVenta extends Page
             'producto_id'     => $productoId,
             'presentacion_id' => $presentacionId,
             'cantidad'        => 1,
-            'descuento'       => null,
-            'descuento_tipo'  => TipoDescuento::Porcentaje->value,
         ];
 
         $this->dispatch('linea-agregada', clave: $clave);
@@ -1254,8 +1231,6 @@ class PuntoDeVenta extends Page
                 productoId: (int) $linea['producto_id'],
                 cantidad: self::numero($linea['cantidad']),
                 presentacionId: self::idOpcional($linea['presentacion_id']),
-                descuento: self::numero($linea['descuento']),
-                tipoDescuento: TipoDescuento::desdeEstado($linea['descuento_tipo'] ?? null),
             );
         }
 
