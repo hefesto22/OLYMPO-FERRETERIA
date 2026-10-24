@@ -50,12 +50,8 @@ class AjusteInventarioForm
                     ->required()
                     ->inline()
                     ->live()
-                    ->afterStateUpdated(function (Set $set, mixed $state): void {
-                        $tipo = MotivoAjuste::desdeEstado($state)?->tipo();
-
-                        if ($tipo !== null) {
-                            $set('tipo', $tipo->value);
-                        }
+                    ->afterStateUpdated(function (Get $get, Set $set, mixed $state, mixed $old): void {
+                        self::alCambiarMotivo($get, $set, $state, $old);
                     })
                     ->helperText(fn (Get $get): ?string => MotivoAjuste::desdeEstado($get('motivo'))?->getDescription()),
 
@@ -206,6 +202,35 @@ class AjusteInventarioForm
                     ->visible(fn (Get $get): bool => self::tipo($get, '../../') !== TipoAjuste::Entrada),
             ]),
         ];
+    }
+
+    /**
+     * Al cambiar "¿Qué pasó?": el tipo sale del motivo; con "Otro" se queda
+     * en suma o resta (lo que había, o suma si venía de un conteo). Si se
+     * pasa de un conteo a una entrada o salida, o al revés, el número que
+     * ya se escribió se queda en la casilla: lo contado pasa a la cantidad
+     * y la cantidad a lo contado.
+     */
+    private static function alCambiarMotivo(Get $get, Set $set, mixed $motivo, mixed $anterior): void
+    {
+        $actual = TipoAjuste::desdeEstado($get('tipo'));
+        $antes = MotivoAjuste::desdeEstado($anterior)?->tipo() ?? $actual;
+        $ahora = MotivoAjuste::desdeEstado($motivo)?->tipo()
+            ?? ($actual === TipoAjuste::Salida ? TipoAjuste::Salida : TipoAjuste::Entrada);
+
+        $set('tipo', $ahora->value);
+
+        if (($antes === TipoAjuste::Conteo) === ($ahora === TipoAjuste::Conteo)) {
+            return;
+        }
+
+        [$de, $a] = $ahora === TipoAjuste::Conteo ? ['cantidad', 'contado'] : ['contado', 'cantidad'];
+
+        foreach (self::lineas($get('detalles')) ?? [] as $clave => $linea) {
+            if (is_array($linea)) {
+                $set("detalles.{$clave}.{$a}", $linea[$de] ?? null);
+            }
+        }
     }
 
     /**

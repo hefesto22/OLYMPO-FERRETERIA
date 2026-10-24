@@ -176,6 +176,33 @@ it('una merma muestra la pérdida con el ISV que se pagó', function (): void {
         ->assertMountedActionModalSee('−L. 46.00');
 });
 
+it('al cambiar qué pasó, el número escrito se queda en la casilla', function (): void {
+    test()->actingAs(usuarioDeAjustes());
+    $clavo = productoConExistencia(30, 10.00);
+
+    Livewire::test(ManageAjustesInventario::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm([
+            'motivo'   => MotivoAjuste::DanoMerma->value,
+            'tipo'     => 'salida',
+            'detalles' => [
+                ['producto_id' => $clavo->id, 'cantidad' => 4],
+            ],
+        ])
+        // De una salida a un conteo: los 4 pasan a lo contado.
+        ->set('mountedActions.0.data.motivo', MotivoAjuste::ConteoFisico->value)
+        ->assertSet('mountedActions.0.data.tipo', 'conteo')
+        ->assertSet('mountedActions.0.data.detalles.0.contado', 4)
+        // Y de vuelta: lo contado pasa a la cantidad.
+        ->set('mountedActions.0.data.detalles.0.contado', 6)
+        ->set('mountedActions.0.data.motivo', MotivoAjuste::Robo->value)
+        ->assertSet('mountedActions.0.data.detalles.0.cantidad', 6)
+        // "Otro" después de un conteo pregunta y arranca en "suma".
+        ->set('mountedActions.0.data.motivo', MotivoAjuste::ConteoFisico->value)
+        ->set('mountedActions.0.data.motivo', MotivoAjuste::Otro->value)
+        ->assertSet('mountedActions.0.data.tipo', 'entrada');
+});
+
 it('el buscador de productos muestra código y existencia, y escapa el nombre', function (): void {
     /** @var Producto $producto */
     $producto = Producto::factory()->create(['nombre' => 'Cemento <b>gris</b>']);
