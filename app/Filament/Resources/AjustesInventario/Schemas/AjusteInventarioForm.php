@@ -6,7 +6,7 @@ namespace App\Filament\Resources\AjustesInventario\Schemas;
 
 use App\Enums\MotivoAjuste;
 use App\Enums\TipoAjuste;
-use App\Models\Producto;
+use App\Filament\Schemas\Components\ProductoField;
 use App\Support\Inventario\OpcionesProducto;
 use App\Support\Inventario\ResumenAjuste;
 use Closure;
@@ -18,16 +18,18 @@ use Filament\Forms\Components\ToggleButtons;
 use Filament\Infolists\Components\TextEntry;
 use Filament\Schemas\Components\Grid;
 use Filament\Schemas\Components\Group;
+use Filament\Schemas\Components\Text;
 use Filament\Schemas\Components\Utilities\Get;
 use Filament\Schemas\Components\Utilities\Set;
 use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
-use Illuminate\Database\Eloquent\Builder;
+use Filament\Support\Enums\TextSize;
 
 /**
  * Ajuste en un modal: primero qué pasó (el motivo ya dice si suma, resta
  * o deja lo contado) y después los productos. Cada línea muestra lo que
- * hay y cómo queda; abajo, cuánto vale el ajuste al costo.
+ * hay y cómo queda; abajo, cuánto vale el ajuste con el ISV que se pagó
+ * al comprar (el costo se escribe sin ISV, como en las entradas).
  *
  * En un conteo físico se escribe lo contado y el sistema saca la
  * diferencia. La fecha y quién lo registra los pone el sistema.
@@ -99,7 +101,8 @@ class AjusteInventarioForm
                             ->maxLength(255),
                         View::make('filament.ajustes.resumen')
                             ->viewData(fn (Get $get): array => [
-                                'resumen' => ResumenAjuste::desdeFormulario(self::tipo($get), self::lineas($get('detalles'))),
+                                'resumen'       => ResumenAjuste::desdeFormulario(self::tipo($get), self::lineas($get('detalles'))),
+                                'palabraSalida' => self::palabraSalida($get),
                             ]),
                     ]),
             ]);
@@ -139,14 +142,7 @@ class AjusteInventarioForm
     {
         return [
             // Las etiquetas se ven en el teléfono, donde cada línea va apilada.
-            Select::make('producto_id')
-                ->label('Producto')
-                ->relationship('producto', 'nombre', fn (Builder $query): Builder => $query
-                    ->where('activo', true)
-                    ->where('controla_stock', true)
-                    ->with('unidadMedida'))
-                ->getOptionLabelFromRecordUsing(fn (Producto $record): string => OpcionesProducto::etiqueta($record))
-                ->searchable(['nombre', 'codigo', 'codigo_barras'])
+            ProductoField::make()
                 ->required()
                 ->distinct()
                 ->validationMessages(['distinct' => 'Este producto ya está en otra línea.'])
@@ -193,12 +189,14 @@ class AjusteInventarioForm
                     ->prefix((string) config('honduras.moneda.simbolo', 'L.'))
                     ->placeholder('Costo promedio')
                     ->live(onBlur: true)
+                    ->belowContent(fn (Get $get): ?Text => self::costoConIsv($get))
                     ->visible(fn (Get $get): bool => self::tipo($get, '../../') === TipoAjuste::Entrada),
                 View::make('filament.ajustes.resultado-linea')
                     ->viewData(fn (Get $get): array => [
-                        'tipo'    => self::tipo($get, '../../')->value,
-                        'elegido' => filled($get('producto_id')),
-                        'linea'   => ResumenAjuste::linea(self::tipo($get, '../../'), [
+                        'tipo'          => self::tipo($get, '../../')->value,
+                        'palabraSalida' => self::palabraSalida($get, '../../'),
+                        'elegido'       => filled($get('producto_id')),
+                        'linea'         => ResumenAjuste::linea(self::tipo($get, '../../'), [
                             'producto_id'    => $get('producto_id'),
                             'contado'        => $get('contado'),
                             'cantidad'       => $get('cantidad'),
@@ -211,6 +209,23 @@ class AjusteInventarioForm
     }
 
     /**
+     * Debajo del costo neto, en cuánto sale con ISV: L 10 → "Con ISV: L.
+     * 11.50". Con ese valor se cuenta lo que entra.
+     */
+    private static function costoConIsv(Get $get): ?Text
+    {
+        $texto = OpcionesProducto::costoConIsv($get('producto_id'), $get('costo_unitario'));
+
+        if ($texto === null) {
+            return null;
+        }
+
+        return Text::make($texto)
+            ->color('gray')
+            ->size(TextSize::Small);
+    }
+
+    /**
      * El tipo que sale del motivo; con "Otro", el que se escogió. `$ruta`
      * sube desde una línea del repeater ("../../").
      */
@@ -219,6 +234,15 @@ class AjusteInventarioForm
         return MotivoAjuste::desdeEstado($get($ruta.'motivo'))?->tipo()
             ?? TipoAjuste::desdeEstado($get($ruta.'tipo'))
             ?? TipoAjuste::Entrada;
+    }
+
+    /**
+     * Cómo se llama lo que sale: lo que se usa en el negocio es un gasto;
+     * una merma, un robo o un faltante, una pérdida.
+     */
+    private static function palabraSalida(Get $get, string $ruta = ''): string
+    {
+        return MotivoAjuste::desdeEstado($get($ruta.'motivo')) === MotivoAjuste::UsoInterno ? 'Gasto' : 'Pérdida';
     }
 
     /**

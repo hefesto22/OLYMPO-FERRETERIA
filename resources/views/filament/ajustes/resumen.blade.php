@@ -1,9 +1,14 @@
 {{--
-    Cuánto vale el ajuste al costo, a la derecha, antes de aplicarlo.
+    Cuánto vale el ajuste, a la derecha, antes de aplicarlo: al costo neto
+    y con el ISV que se pagó al comprar (una merma se pierde con todo y
+    su ISV). $palabraSalida: "Pérdida" o "Gasto".
     Datos de App\Support\Inventario\ResumenAjuste::desdeFormulario().
 --}}
 @php
     $productos = $resumen['productos'] === 1 ? '1 producto' : $resumen['productos'].' productos';
+    $entra = $resumen['entra'] + $resumen['entra_isv'];
+    $sale = $resumen['sale'] + $resumen['sale_isv'];
+    $diferencia = round($entra - $sale, 2);
 @endphp
 
 @if ($resumen['productos'] === 0)
@@ -13,13 +18,13 @@
         @if ($resumen['suben'] > 0)
             <div>
                 <dt>Sobran en {{ $resumen['suben'] === 1 ? '1 producto' : $resumen['suben'].' productos' }}</dt>
-                <dd>+{{ lempiras($resumen['entra']) }}</dd>
+                <dd>+{{ lempiras($entra) }}</dd>
             </div>
         @endif
         @if ($resumen['bajan'] > 0)
             <div>
                 <dt>Faltan en {{ $resumen['bajan'] === 1 ? '1 producto' : $resumen['bajan'].' productos' }}</dt>
-                <dd>−{{ lempiras($resumen['sale']) }}</dd>
+                <dd>−{{ lempiras($sale) }}</dd>
             </div>
         @endif
         @if ($resumen['iguales'] > 0)
@@ -29,8 +34,8 @@
             </div>
         @endif
         <div class="es-total">
-            <dt>Diferencia al costo</dt>
-            <dd>{{ $resumen['entra'] - $resumen['sale'] < 0 ? '−' : '+' }}{{ lempiras(abs($resumen['entra'] - $resumen['sale'])) }}</dd>
+            <dt>Diferencia con ISV</dt>
+            <dd>{{ $diferencia < 0 ? '−' : '+' }}{{ lempiras(abs($diferencia)) }}</dd>
         </div>
     </dl>
 @elseif ($resumen['tipo'] === 'salida')
@@ -39,9 +44,17 @@
             <dt>Salen</dt>
             <dd>{{ $productos }}</dd>
         </div>
+        <div>
+            <dt>Costo sin ISV</dt>
+            <dd>{{ lempiras($resumen['sale']) }}</dd>
+        </div>
+        <div>
+            <dt>ISV que se pagó</dt>
+            <dd>{{ lempiras($resumen['sale_isv']) }}</dd>
+        </div>
         <div class="es-total">
-            <dt>Valor al costo</dt>
-            <dd>−{{ lempiras($resumen['sale']) }}</dd>
+            <dt>{{ $palabraSalida }} con ISV</dt>
+            <dd>−{{ lempiras($sale) }}</dd>
         </div>
     </dl>
 @else
@@ -50,9 +63,17 @@
             <dt>Entran</dt>
             <dd>{{ $productos }}</dd>
         </div>
+        <div>
+            <dt>Costo sin ISV</dt>
+            <dd>{{ lempiras($resumen['entra']) }}</dd>
+        </div>
+        <div>
+            <dt>ISV que se pagó</dt>
+            <dd>{{ lempiras($resumen['entra_isv']) }}</dd>
+        </div>
         <div class="es-total">
-            <dt>Valor al costo</dt>
-            <dd>+{{ lempiras($resumen['entra']) }}</dd>
+            <dt>Valor con ISV</dt>
+            <dd>+{{ lempiras($entra) }}</dd>
         </div>
     </dl>
 @endif

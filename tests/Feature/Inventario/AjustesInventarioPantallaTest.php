@@ -10,6 +10,7 @@ use App\Models\AjusteInventario;
 use App\Models\Producto;
 use App\Models\User;
 use App\Services\Inventario\InventarioService;
+use App\Support\Inventario\OpcionesProducto;
 use Filament\Actions\CreateAction;
 use Filament\Facades\Filament;
 use Filament\Forms\Components\Repeater;
@@ -136,10 +137,11 @@ it('no deja sacar más de lo que hay', function (): void {
         ->and((float) $clavo->refresh()->stock)->toBe(3.0);
 });
 
-it('muestra cuánto falta en cada línea del conteo', function (): void {
+it('muestra cuánto falta en cada línea del conteo, con ISV', function (): void {
     test()->actingAs(usuarioDeAjustes());
     $clavo = productoConExistencia(30, 10.00);
 
+    // Faltan 5 a L 10 sin ISV: L 50 + 15 % = L 57.50.
     Livewire::test(ManageAjustesInventario::class)
         ->mountAction(CreateAction::class)
         ->fillForm([
@@ -149,6 +151,44 @@ it('muestra cuánto falta en cada línea del conteo', function (): void {
             ],
         ])
         ->assertMountedActionModalSee('Faltan 5')
-        ->assertMountedActionModalSee('L. 50.00 al costo')
-        ->assertMountedActionModalSee('Diferencia al costo');
+        ->assertMountedActionModalSee('Pérdida de L. 57.50 con ISV')
+        ->assertMountedActionModalSee('Diferencia con ISV')
+        ->assertMountedActionModalSee('−L. 57.50');
+});
+
+it('una merma muestra la pérdida con el ISV que se pagó', function (): void {
+    test()->actingAs(usuarioDeAjustes());
+    $clavo = productoConExistencia(30, 10.00);
+
+    // Salen 4 a L 10 sin ISV: L 40 + ISV L 6 = L 46.
+    Livewire::test(ManageAjustesInventario::class)
+        ->mountAction(CreateAction::class)
+        ->fillForm([
+            'motivo'   => MotivoAjuste::DanoMerma->value,
+            'detalles' => [
+                ['producto_id' => $clavo->id, 'cantidad' => 4],
+            ],
+        ])
+        ->assertMountedActionModalSee('Pérdida de L. 46.00 con ISV')
+        ->assertMountedActionModalSee('Costo sin ISV')
+        ->assertMountedActionModalSee('L. 6.00')
+        ->assertMountedActionModalSee('Pérdida con ISV')
+        ->assertMountedActionModalSee('−L. 46.00');
+});
+
+it('el buscador de productos muestra código y existencia, y escapa el nombre', function (): void {
+    /** @var Producto $producto */
+    $producto = Producto::factory()->create(['nombre' => 'Cemento <b>gris</b>']);
+    app(InventarioService::class)->registrarEntrada($producto, 168, 22.50, TipoMovimientoInventario::InventarioInicial);
+    $producto->refresh();
+
+    $opcion = OpcionesProducto::etiquetaHtml($producto);
+
+    expect($opcion)->toContain('Cemento &lt;b&gt;gris&lt;/b&gt;')
+        ->toContain((string) $producto->codigo)
+        ->toContain('168 '.$producto->unidadMedida->abreviatura)
+        ->toContain('en existencia');
+
+    // El nombre va escapado: no se cuela HTML en el buscador.
+    expect($opcion)->not->toContain('<b>gris</b>');
 });

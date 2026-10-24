@@ -120,6 +120,27 @@ it('una salida mayor que la existencia lanza excepción y no mueve nada', functi
         ->and(MovimientoInventario::query()->count())->toBe(1);
 });
 
+it('al aplicar una merma queda el costo con que salió y cuánto se perdió con ISV', function (): void {
+    $producto = Producto::factory()->create();
+    app(InventarioService::class)->registrarEntrada($producto, 10, 20.00, TipoMovimientoInventario::InventarioInicial);
+
+    /** @var AjusteInventario $ajuste */
+    $ajuste = AjusteInventario::factory()->salida()->create();
+    $ajuste->detalles()->create(['producto_id' => $producto->id, 'cantidad' => 3]);
+
+    // En borrador se valora al promedio de hoy: 3 × L 20 = L 60 + ISV L 9.
+    expect($ajuste->detalles()->sole()->valorConIsv())->toBe(69.0);
+
+    app(AjusteInventarioService::class)->aplicar($ajuste);
+
+    // El promedio cambia después; la pérdida del ajuste no.
+    app(InventarioService::class)->registrarEntrada($producto, 7, 40.00, TipoMovimientoInventario::Entrada);
+    $linea = $ajuste->refresh()->detalles()->sole();
+
+    expect((float) $linea->costo_unitario)->toBe(20.0)
+        ->and($linea->valorConIsv())->toBe(69.0);
+});
+
 it('una salida conserva el costo promedio', function (): void {
     $producto = Producto::factory()->create();
     $inventario = app(InventarioService::class);

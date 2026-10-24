@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace App\Filament\Resources\EntradasInventario\Schemas;
 
+use App\Filament\Schemas\Components\ProductoField;
 use App\Models\EntradaInventario;
-use App\Models\Producto;
 use App\Models\User;
 use App\Support\Inventario\OpcionesProducto;
 use App\Support\Inventario\ProyeccionEntrada;
@@ -24,7 +24,6 @@ use Filament\Schemas\Components\View;
 use Filament\Schemas\Schema;
 use Filament\Support\Enums\TextSize;
 use Filament\Support\Icons\Heroicon;
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Str;
 
 class EntradaInventarioForm
@@ -79,13 +78,7 @@ class EntradaInventarioForm
     {
         return [
             // Las etiquetas se ven en el teléfono, donde cada línea va apilada.
-            Select::make('producto_id')
-                ->label('Producto')
-                ->relationship('producto', 'nombre', fn (Builder $query): Builder => $query
-                    ->where('activo', true)
-                    ->with('unidadMedida'))
-                ->getOptionLabelFromRecordUsing(fn (Producto $record): string => OpcionesProducto::etiqueta($record))
-                ->searchable(['nombre', 'codigo', 'codigo_barras'])
+            ProductoField::make()
                 ->required()
                 ->live()
                 ->afterStateUpdated(function (Set $set, mixed $state): void {
@@ -131,16 +124,11 @@ class EntradaInventarioForm
      */
     private static function costoConIsv(Get $get): ?Text
     {
-        $costo = $get('costo_unitario');
-        $tasa = OpcionesProducto::tasaIsv($get('producto_id'));
+        $texto = OpcionesProducto::costoConIsv($get('producto_id'), $get('costo_unitario'));
 
-        if (! is_numeric($costo) || (float) $costo <= 0 || $tasa === null) {
+        if ($texto === null) {
             return null;
         }
-
-        $texto = $tasa > 0
-            ? 'Con ISV: '.costoLempiras(round((float) $costo * (1 + $tasa), 4))
-            : 'Exento: te sale en '.costoLempiras((float) $costo);
 
         return Text::make($texto)
             ->color('gray')

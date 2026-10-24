@@ -29,6 +29,21 @@ final class OpcionesProducto
     }
 
     /**
+     * La opción del buscador de productos, en HTML: el nombre y, debajo, el
+     * código y la marca; a la derecha, cuánto hay. Cerrado, el select solo
+     * deja ver el nombre y la unidad (lo demás lo esconde el CSS). La vista
+     * escapa todo lo que viene del producto.
+     */
+    public static function etiquetaHtml(Producto $producto): string
+    {
+        return view('filament.inventario.opcion-producto', [
+            'producto'   => $producto,
+            'unidad'     => $producto->unidadMedida->abreviatura,
+            'existencia' => $producto->controla_stock ? (float) $producto->stock : null,
+        ])->render();
+    }
+
+    /**
      * Presentaciones activas del producto para un Select:
      * [id => "Caja x100 · 100 UND"] o [id => "Clavo suelto · 100 por LB"].
      *
@@ -123,6 +138,24 @@ final class OpcionesProducto
     public static function tasaIsv(mixed $productoId): ?float
     {
         return self::producto($productoId)?->tipo_isv->tasa();
+    }
+
+    /**
+     * En cuánto sale un costo neto con el ISV del producto: L 10 con 15 %
+     * → "Con ISV: L. 11.50"; exento → "Exento: te sale en L. 10.00". Null
+     * sin producto o sin costo.
+     */
+    public static function costoConIsv(mixed $productoId, mixed $costo): ?string
+    {
+        $tasa = self::tasaIsv($productoId);
+
+        if (! is_numeric($costo) || (float) $costo <= 0 || $tasa === null) {
+            return null;
+        }
+
+        return $tasa > 0
+            ? 'Con ISV: '.costoLempiras(round((float) $costo * (1 + $tasa), 4))
+            : 'Exento: te sale en '.costoLempiras((float) $costo);
     }
 
     public static function existencia(mixed $productoId): ?float

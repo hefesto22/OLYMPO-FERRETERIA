@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Enums\EstadoDocumento;
 use App\Enums\TipoAjuste;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,9 @@ use Illuminate\Support\Carbon;
  * Línea de un ajuste. En una entrada o salida se escribe la cantidad; en
  * un conteo físico se escribe lo contado y la cantidad (la diferencia) y
  * su tipo se calculan aquí contra la existencia.
+ *
+ * El costo va sin ISV: en un borrador, el tecleado en una entrada (0 =
+ * el promedio); al aplicar, el costo con que se movió el inventario.
  *
  * @property int $id
  * @property int $ajuste_inventario_id
@@ -133,5 +137,29 @@ class AjusteInventarioDetalle extends Model
             TipoAjuste::Salida  => -(float) $this->cantidad,
             default             => 0.0,
         };
+    }
+
+    /**
+     * Costo unitario neto (sin ISV) con que se valora la línea. Al aplicar
+     * el ajuste queda guardado; en un borrador sin costo, el promedio de hoy.
+     */
+    public function costoValorado(): float
+    {
+        if ((float) $this->costo_unitario > 0 || $this->ajuste->estado === EstadoDocumento::Confirmado) {
+            return (float) $this->costo_unitario;
+        }
+
+        return (float) $this->producto->costo_promedio;
+    }
+
+    /**
+     * Lo que vale el cambio con el ISV que se pagó al comprar: lo que se
+     * pierde en una merma o lo que entra en un sobrante. Sin cambio, 0.
+     */
+    public function valorConIsv(): float
+    {
+        $valor = round((float) $this->cantidad * $this->costoValorado(), 2);
+
+        return round($valor + round($valor * $this->producto->tipo_isv->tasa(), 2), 2);
     }
 }

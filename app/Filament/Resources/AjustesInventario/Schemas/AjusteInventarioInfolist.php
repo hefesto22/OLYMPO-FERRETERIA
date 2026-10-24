@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace App\Filament\Resources\AjustesInventario\Schemas;
 
 use App\Enums\EstadoDocumento;
-use App\Enums\TipoAjuste;
 use App\Models\AjusteInventario;
 use App\Models\AjusteInventarioDetalle;
 use Filament\Infolists\Components\RepeatableEntry;
@@ -17,7 +16,8 @@ use Filament\Support\Icons\Heroicon;
 
 /**
  * Detalle de un ajuste (en un modal): qué pasó, quién y cuándo, y qué le
- * pasó a cada producto (cuánto cambió y de cuánto a cuánto quedó).
+ * pasó a cada producto (cuánto cambió, de cuánto a cuánto quedó y cuánto
+ * vale ese cambio con el ISV que se pagó al comprar).
  */
 class AjusteInventarioInfolist
 {
@@ -62,7 +62,8 @@ class AjusteInventarioInfolist
                         TableColumn::make('Producto'),
                         TableColumn::make('Cambio'),
                         TableColumn::make('De cuánto a cuánto'),
-                        TableColumn::make('Costo'),
+                        TableColumn::make('Costo neto'),
+                        TableColumn::make('Valor con ISV'),
                     ])
                     ->schema([
                         TextEntry::make('producto.nombre'),
@@ -78,6 +79,9 @@ class AjusteInventarioInfolist
                             ->state(fn (AjusteInventarioDetalle $record): string => self::existencias($record)),
                         TextEntry::make('costo_unitario')
                             ->state(fn (AjusteInventarioDetalle $record): string => self::costo($record)),
+                        TextEntry::make('valor_con_isv')
+                            ->state(fn (AjusteInventarioDetalle $record): string => self::valor($record))
+                            ->weight('medium'),
                     ]),
             ]);
     }
@@ -116,14 +120,30 @@ class AjusteInventarioInfolist
         return '—';
     }
 
+    /**
+     * Costo unitario sin ISV: el guardado al aplicar; en un borrador, lo
+     * tecleado en una entrada o el promedio de hoy.
+     */
     private static function costo(AjusteInventarioDetalle $detalle): string
     {
-        if ($detalle->tipoMovimiento($detalle->ajuste->tipo) !== TipoAjuste::Entrada) {
-            return 'Costo promedio';
+        $costo = $detalle->costoValorado();
+
+        return $costo > 0 ? costoLempiras($costo) : '—';
+    }
+
+    /**
+     * Lo que vale el cambio con el ISV que se pagó: "−L. 57.50" en una
+     * merma o faltante, "+L. 115.00" en lo que entra.
+     */
+    private static function valor(AjusteInventarioDetalle $detalle): string
+    {
+        $cambio = $detalle->cambio($detalle->ajuste->tipo);
+        $valor = $detalle->valorConIsv();
+
+        if (abs($cambio) < 0.0000005 || $valor <= 0) {
+            return '—';
         }
 
-        return (float) $detalle->costo_unitario > 0
-            ? costoLempiras((float) $detalle->costo_unitario)
-            : 'Costo promedio';
+        return ($cambio > 0 ? '+' : '−').lempiras($valor);
     }
 }

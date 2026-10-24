@@ -62,10 +62,16 @@ final class AjusteInventarioService
                     $detalle->forceFill(['existencia_antes' => $existencia]);
                 }
 
-                $detalle->saveQuietly();
-
                 $tipo = $detalle->tipoMovimiento($ajuste->tipo);
                 $cantidad = (float) $detalle->cantidad;
+
+                // Queda el costo con que se mueve: lo tecleado en una entrada o,
+                // si no, el promedio de este momento (con eso se ve cuánto se perdió).
+                if ($tipo !== TipoAjuste::Entrada || (float) $detalle->costo_unitario <= 0) {
+                    $detalle->forceFill(['costo_unitario' => (float) $producto->costo_promedio]);
+                }
+
+                $detalle->saveQuietly();
 
                 // Conteo igual a lo que había: no se mueve nada.
                 if ($tipo === null || $cantidad <= 0) {
@@ -73,9 +79,7 @@ final class AjusteInventarioService
                 }
 
                 if ($tipo === TipoAjuste::Entrada) {
-                    $costo = (float) $detalle->costo_unitario > 0
-                        ? (float) $detalle->costo_unitario
-                        : (float) $producto->costo_promedio;
+                    $costo = (float) $detalle->costo_unitario;
 
                     $tipoMovimiento = $ajuste->motivo === MotivoAjuste::InventarioInicial
                         ? TipoMovimientoInventario::InventarioInicial
